@@ -1,4 +1,4 @@
-# modul/bot/main_bot/main.py
+# modul/bot/main_bot/main.py (To'liq to'g'irlangan versiya)
 
 import asyncio
 from datetime import datetime, timedelta
@@ -28,18 +28,28 @@ STATS_COMMAND_ENABLED = True
 webhook_url = 'https://ismoilov299.uz/'
 
 
-async def main_menu():
-    """Asosiy menyu klaviaturasi"""
+async def main_menu(user_uid: int = None):
+    """Asosiy menyu klaviaturasi - dinamik"""
     buttons = [
         [
             InlineKeyboardButton(text="Создать бота ⚙️", callback_data="create_bot"),
             InlineKeyboardButton(text="Мои боты 🖥️", callback_data="my_bots")
-        ],
-        [
-            InlineKeyboardButton(text="Инфо 📖", callback_data="info"),
-            InlineKeyboardButton(text="FAQ 💬", callback_data="faq")
         ]
     ]
+
+    # Faqat GPT bot egalari uchun "Ваш баланс" tugmasi
+    if user_uid:
+        gpt_bot_ids = await get_user_gpt_bots(user_uid)
+        if gpt_bot_ids:
+            buttons.append([
+                InlineKeyboardButton(text="Ваш баланс 💰", callback_data="my_balance")
+            ])
+
+    buttons.append([
+        InlineKeyboardButton(text="Инфо 📖", callback_data="info"),
+        InlineKeyboardButton(text="FAQ 💬", callback_data="faq")
+    ])
+
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -52,6 +62,136 @@ async def registration_keyboard(registration_url):
 # ==========================================
 # UTILITY FUNCTIONS - BOT VALIDATSIYASI
 # ==========================================
+
+@sync_to_async
+def get_user_payment_history(user_uid: int):
+    """Foydalanuvchining o'z GPT botlaridagi to'lovlar tarixini olish"""
+    try:
+        from modul.models import PaymentTransaction, Bot
+        from django.db.models import Sum, Count
+
+        # Avval foydalanuvchining GPT botlarini topish
+        user_gpt_bots = Bot.objects.filter(
+            owner__uid=user_uid,
+            enable_chatgpt=True
+        ).values_list('id', flat=True)
+
+        if not user_gpt_bots:
+            logger.info(f"User {user_uid} has no ChatGPT bots")
+            return None
+
+        user_bot_ids = list(user_gpt_bots)
+        logger.info(f"User {user_uid} GPT bots: {user_bot_ids}")
+
+        # Faqat foydalanuvchining botlaridagi to'lovlar
+        payments = PaymentTransaction.objects.filter(
+            bot_id__in=user_bot_ids,
+            status='completed'
+        ).order_by('-created_at')
+
+        if not payments.exists():
+            logger.info(f"No payments found for user {user_uid} bots")
+            return None
+
+        # Umumiy statistika
+        total_stats = payments.aggregate(
+            total_payments=Count('id'),
+            total_stars=Sum('amount_stars'),
+            total_rubles=Sum('amount_rubles'),
+            unique_users=Count('user_id', distinct=True)
+        )
+
+        # Bot bo'yicha guruhlangan statistika
+        by_bot = []
+        for bot_payment in payments.values('bot_id').annotate(
+                count=Count('id'),
+                total_stars=Sum('amount_stars'),
+                total_rubles=Sum('amount_rubles'),
+                unique_users=Count('user_id', distinct=True)
+        ).order_by('-total_rubles'):
+
+            try:
+                bot = Bot.objects.filter(id=bot_payment['bot_id']).first()
+                if bot:
+                    by_bot.append({
+                        'bot_id': bot.id,
+                        'bot_username': bot.username or f"Bot #{bot.id}",
+                        'count': bot_payment['count'],
+                        'total_stars': bot_payment['total_stars'],
+                        'total_rubles': bot_payment['total_rubles'],
+                        'unique_users': bot_payment['unique_users']
+                    })
+            except Exception as e:
+                logger.error(f"Error getting bot info: {e}")
+                continue
+
+        # Oxirgi 10 ta to'lov
+        recent_payments = []
+        for payment in payments[:10]:
+            try:
+                bot = Bot.objects.filter(id=payment.bot_id).first()
+                bot_username = bot.username if bot else "Unknown"
+
+                from modul.models import User
+                user = User.objects.filter(uid=payment.user_id).first()
+                user_name = "Unknown"
+                if user:
+                    user_name = user.first_name or "No name"
+                    if user.last_name:
+                        user_name += f" {user.last_name}"
+
+                recent_payments.append({
+                    'date': payment.created_at.strftime('%d.%m.%Y %H:%M'),
+                    'bot_username': bot_username,
+                    'user_id': payment.user_id,
+                    'user_name': user_name,
+                    'stars': payment.amount_stars,
+                    'rubles': payment.amount_rubles
+                })
+            except Exception as e:
+                logger.error(f"Error processing payment: {e}")
+                continue
+
+        return {
+            'total_stats': total_stats,
+            'by_bot': by_bot,
+            'recent_payments': recent_payments
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting user payment history: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return None
+
+
+# ==========================================
+# UTILITY FUNCTIONS - BOT VALIDATSIYASI
+# ==========================================
+
+@sync_to_async
+def get_user_gpt_bots(user_uid: int):
+    """Foydalanuvchining ChatGPT botlarini olish"""
+    try:
+        from modul.models import Bot
+
+        # Foydalanuvchining enable_chatgpt=True bo'lgan botlari
+        gpt_bots = Bot.objects.filter(
+            owner__uid=user_uid,
+            enable_chatgpt=True
+        ).values_list('id', flat=True)
+
+        bot_ids = list(gpt_bots)
+        logger.info(f"User {user_uid} has {len(bot_ids)} ChatGPT bots: {bot_ids}")
+
+        return bot_ids if bot_ids else None
+
+    except Exception as e:
+        logger.error(f"Error getting user GPT bots: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return None
+
 
 @sync_to_async
 def validate_bot_exists(bot_db_id: int):
@@ -727,7 +867,7 @@ def init_bot_handlers():
             if db_user:
                 await message.answer(
                     welcome_text,
-                    reply_markup=await main_menu(),
+                    reply_markup=await main_menu(user.id),
                     parse_mode="HTML"
                 )
                 logger.info(f"✅ Main menu shown to existing user")
@@ -736,7 +876,7 @@ def init_bot_handlers():
                 if new_user:
                     await message.answer(
                         welcome_text,
-                        reply_markup=await main_menu(),
+                        reply_markup=await main_menu(user.id),
                         parse_mode="HTML"
                     )
                     logger.info(f"✅ Main menu shown to new user")
@@ -1166,13 +1306,116 @@ def init_bot_handlers():
 
     # ===== OTHER HANDLERS =====
 
+    @main_bot_router.callback_query(F.data == "my_balance")
+    async def show_my_balance(callback: CallbackQuery):
+        """Bot ownerlari uchun o'z botlaridagi to'lovlar tarixini ko'rsatish"""
+        user_id = callback.from_user.id
+
+        try:
+            # Avval GPT bot borligini tekshirish
+            gpt_bot_ids = await get_user_gpt_bots(user_id)
+
+            if not gpt_bot_ids:
+                await callback.message.edit_text(
+                    "❌ <b>У вас нет ChatGPT ботов</b>\n\n"
+                    "Эта функция доступна только владельцам ChatGPT ботов.\n\n"
+                    "💡 Создайте ChatGPT бота, чтобы видеть статистику пополнений.",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_main")]
+                    ]),
+                    parse_mode="HTML"
+                )
+                await callback.answer()
+                return
+
+            wait_msg = await callback.message.edit_text("⏳ Загрузка данных...")
+
+            history = await get_user_payment_history(user_id)
+
+            if not history:
+                await wait_msg.edit_text(
+                    "📊 <b>Статистика пополнений ваших ChatGPT ботов</b>\n\n"
+                    "В ваших ботах пока нет пополнений.\n\n"
+                    "💡 Здесь будут отображаться все пополнения, "
+                    "которые пользователи делают в ваших ChatGPT ботах.",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_main")]
+                    ]),
+                    parse_mode="HTML"
+                )
+                await callback.answer()
+                return
+
+            total = history['total_stats']
+
+            message = (
+                f"💰 <b>СТАТИСТИКА ПОПОЛНЕНИЙ ВАШИХ БОТОВ</b>\n"
+                f"{'=' * 35}\n\n"
+                f"📊 <b>Общая статистика:</b>\n"
+                f"├ Всего пополнений: <b>{total['total_payments']}</b> шт\n"
+                f"├ Пользователей: <b>{total['unique_users']}</b> чел\n"
+                f"├ Получено звезд: <b>{total['total_stars']}</b> ⭐️\n"
+                f"└ Сумма: <b>{total['total_rubles']:.2f}₽</b>\n\n"
+            )
+
+            if history['by_bot']:
+                message += f"🤖 <b>Статистика по ботам:</b>\n\n"
+                for idx, bot in enumerate(history['by_bot'], 1):
+                    message += (
+                        f"<b>{idx}. @{bot['bot_username']}</b>\n"
+                        f"├ Пополнений: {bot['count']} шт\n"
+                        f"├ Пользователей: {bot['unique_users']} чел\n"
+                        f"├ Звезд: {bot['total_stars']} ⭐️\n"
+                        f"└ Сумма: {bot['total_rubles']:.2f}₽\n\n"
+                    )
+
+            if history['recent_payments']:
+                message += f"📅 <b>Последние пополнения:</b>\n\n"
+                for payment in history['recent_payments'][:5]:
+                    message += (
+                        f"• <b>{payment['date']}</b>\n"
+                        f"  @{payment['bot_username']}\n"
+                        f"  👤 {payment['user_name']} (<code>{payment['user_id']}</code>)\n"
+                        f"  💰 {payment['stars']} ⭐️ = {payment['rubles']}₽\n\n"
+                    )
+
+            message += (
+                f"{'─' * 35}\n"
+                f"💡 <i>Это пополнения в ваших ChatGPT ботах</i>"
+            )
+
+            await wait_msg.edit_text(
+                message,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🔄 Обновить", callback_data="my_balance")],
+                    [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_main")]
+                ]),
+                parse_mode="HTML"
+            )
+
+            logger.info(f"✅ Balance history shown for bot owner {user_id}")
+
+        except Exception as e:
+            logger.error(f"❌ Error showing balance history: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+
+            await callback.message.edit_text(
+                "❌ Ошибка при загрузке данных",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_main")]
+                ])
+            )
+
+        await callback.answer()
+
     @main_bot_router.callback_query(F.data == "back_to_main")
     async def back_to_main(callback: CallbackQuery, state: FSMContext):
         """Asosiy menyuga qaytish"""
         await state.clear()
         await callback.message.edit_text(
             f"🏠 <b>Главное меню</b>\n\nВыберите нужное действие:",
-            reply_markup=await main_menu(),
+            reply_markup=await main_menu(callback.from_user.id),
             parse_mode="HTML"
         )
         await callback.answer()
@@ -1202,13 +1445,16 @@ def init_bot_handlers():
             f"• Постоянные обновления"
         )
 
+        # Orqaga qaytish uchun dinamik menyu
+        back_button = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🤖 Создать бота", callback_data="create_bot")],
+            [InlineKeyboardButton(text="💬 Поддержка", url="https://t.me/Dark_Just")],
+            [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_main")]
+        ])
+
         await callback.message.edit_text(
             info_text,
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🤖 Создать бота", callback_data="create_bot")],
-                [InlineKeyboardButton(text="💬 Поддержка", url="https://t.me/Dark_Just")],
-                [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_main")]
-            ]),
+            reply_markup=back_button,
             parse_mode="HTML"
         )
         await callback.answer()
@@ -1243,13 +1489,16 @@ def init_bot_handlers():
             f"Сразу после создания! Обычно 30-60 секунд на настройку."
         )
 
+        # Orqaga qaytish uchun
+        back_button = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❓ Задать вопрос", url="https://t.me/Dark_Just")],
+            [InlineKeyboardButton(text="📖 Инструкция", url="https://ismoilov299.uz")],
+            [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_main")]
+        ])
+
         await callback.message.edit_text(
             faq_text,
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="❓ Задать вопрос", url="https://t.me/Dark_Just")],
-                [InlineKeyboardButton(text="📖 Инструкция", url="https://ismoilov299.uz")],
-                [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_main")]
-            ]),
+            reply_markup=back_button,
             parse_mode="HTML"
         )
         await callback.answer()
@@ -1258,12 +1507,6 @@ def init_bot_handlers():
     @main_bot_router.callback_query(F.data == "statistics")
     async def statistics_redirect(callback: CallbackQuery):
         await callback.answer("📊 Статистику можно посмотреть в разделе 'Мои боты'")
-        from modul.bot.main_bot.handlers.manage_bots import show_my_bots
-        await show_my_bots(callback)
-
-    @main_bot_router.callback_query(F.data == "balance")
-    async def balance_redirect(callback: CallbackQuery):
-        await callback.answer("💰 Баланс можно посмотреть в разделе 'Мои боты'")
         from modul.bot.main_bot.handlers.manage_bots import show_my_bots
         await show_my_bots(callback)
 
