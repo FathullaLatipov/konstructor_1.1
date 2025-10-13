@@ -21,12 +21,12 @@ from modul.clientbot.handlers.chat_gpt_bot.shortcuts import (get_all_names, get_
                                                              get_info_db, get_user_balance_db,
                                                              default_checker, update_bc,
                                                              update_bc_name, get_channels_with_type_for_check,
-                                                             remove_sponsor_channel, process_chatgpt_referral_bonus,
-                                                             get_chatgpt_bot_db_id)
+                                                             remove_sponsor_channel, process_chatgpt_referral_bonus)
 
 robot = ChatGPT()
 
 logger = logging.getLogger(__name__)
+
 
 def chat_gpt_bot_handlers():
     @client_bot_router.message(lambda message: message.text == "/adminpayamount")
@@ -36,9 +36,11 @@ def chat_gpt_bot_handlers():
         await state.set_state(AiAdminState.check_token_and_update)
 
 
-
 from modul.clientbot.handlers.chat_gpt_bot.all_openai import ChatGPT
+
 chatgpt = ChatGPT()
+
+
 @client_bot_router.message(ChatGptFilter())
 async def debug_all_handler(message: types.Message, state: FSMContext):
     current_state = await state.get_state()
@@ -63,7 +65,7 @@ async def debug_all_handler(message: types.Message, state: FSMContext):
             )
 
             if response:
-                await message.answer(f"🤖 GPT-3.5:\n{response}",reply_markup=bt.first_buttons())
+                await message.answer(f"🤖 GPT-3.5:\n{response}", reply_markup=bt.first_buttons())
             else:
                 await message.answer("❌ Произошла ошибка при обработке запроса")
 
@@ -114,7 +116,7 @@ async def debug_all_handler(message: types.Message, state: FSMContext):
             )
 
             if response:
-                await message.answer(f"🤖 GPT-4:\n{response}"  , reply_markup=bt.first_buttons())
+                await message.answer(f"🤖 GPT-4:\n{response}", reply_markup=bt.first_buttons())
             else:
                 await message.answer("❌ Произошла ошибка при обработке запроса")
 
@@ -152,6 +154,7 @@ async def debug_all_handler(message: types.Message, state: FSMContext):
         return
 
     print(f"   ⏭️ Keyingi handler...")
+
 
 @client_bot_router.message(AiAdminState.check_token_and_update)
 async def check_token_and_update(message: types.Message, state: FSMContext):
@@ -444,7 +447,6 @@ async def check_channels_chatgpt_callback(callback: CallbackQuery, state: FSMCon
     await callback.answer()
 
 
-
 @client_bot_router.message(StateFilter('waiting_for_gpt4'), ChatGptFilter())
 async def test_gpt4_handler(message: Message, state: FSMContext):
     """Vaqtincha test handler"""
@@ -484,6 +486,71 @@ async def chat_3_callback(callback: types.CallbackQuery):
         reply_markup=bt.choice_1_3_5()
     )
 
+
+# ==========================================
+# UTILITY FUNCTIONS
+# ==========================================
+
+@sync_to_async
+def get_chatgpt_bot_db_id(bot_token: str):
+    """
+    Bot tokenidan foydalanib bazadan ChatGPT botni topish va uning DB ID sini qaytarish
+    bot_token - Telegram bot token
+    Returns: Database ID (int) yoki None
+    """
+    try:
+        from modul.models import Bot  # ✅ TO'G'RI model nomi
+
+        # Tokendan foydalanib botni topish
+        bot = Bot.objects.filter(token=bot_token).first()
+
+        if bot:
+            logger.info(f"✅ ChatGPT bot found in DB: ID={bot.id}, username={bot.username}")
+            return bot.id  # Database ID
+        else:
+            logger.error(f"❌ ChatGPT bot not found with token: {bot_token[:10]}...")
+            return None
+
+    except Exception as e:
+        logger.error(f"❌ Error getting ChatGPT bot DB ID: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return None
+
+
+@sync_to_async
+def get_user_balance_db(user_id: int, bot_id: int):
+    """
+    Foydalanuvchining balansini hisoblash
+    user_id - foydalanuvchi Telegram ID si
+    bot_id - qaysi bot uchun balans (database ID)
+    """
+    try:
+        from modul.models import PaymentTransaction
+        from django.db.models import Sum
+
+        # Barcha to'lovlarni summalash
+        total = PaymentTransaction.objects.filter(
+            user_id=user_id,
+            bot_id=bot_id,
+            status='completed'
+        ).aggregate(total=Sum('amount_rubles'))
+
+        balance = float(total['total']) if total['total'] else 0.0
+
+        logger.info(f"Balance for user {user_id} in bot {bot_id}: {balance}₽")
+        return balance
+
+    except Exception as e:
+        logger.error(f"Error getting balance: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return 0.0
+
+
+# ==========================================
+# GPT CHAT HANDLERS
+# ==========================================
 
 @client_bot_router.callback_query(F.data.in_(['not', 'with', 'not4', 'with4', 'again_gpt3', 'again_gpt4']))
 async def chat_options_callback(callback: types.CallbackQuery, state: FSMContext):
@@ -707,38 +774,8 @@ async def gpt4(message: Message, state: FSMContext):
             await message.answer('Я могу обрабатывать только текст ! /start')
 
 
-@sync_to_async
-def get_user_balance_db(user_id: int, bot_id: int):
-    """
-    Foydalanuvchining balansini hisoblash
-    user_id - foydalanuvchi Telegram ID si
-    bot_id - qaysi bot uchun balans
-    """
-    try:
-        from modul.models import PaymentTransaction
-        from django.db.models import Sum
-
-        # Barcha to'lovlarni summalash
-        total = PaymentTransaction.objects.filter(
-            user_id=user_id,
-            bot_id=bot_id,
-            status='completed'
-        ).aggregate(total=Sum('amount_rubles'))
-
-        balance = float(total['total']) if total['total'] else 0.0
-
-        logger.info(f"Balance for user {user_id} in bot {bot_id}: {balance}₽")
-        return balance
-
-    except Exception as e:
-        logger.error(f"Error getting balance: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return 0.0
-
-
 # ==========================================
-# CALLBACK HANDLER
+# BALANCE & PAYMENT HANDLERS
 # ==========================================
 
 @client_bot_router.callback_query(F.data == "show_balance")
@@ -777,13 +814,14 @@ async def show_balance_callback(callback: types.CallbackQuery):
 
     await callback.answer()
 
+
 @client_bot_router.callback_query(F.data == "top_up_balance")
 async def top_up_balance_callback(callback: types.CallbackQuery):
     await callback.message.edit_text(
         "💳 <b>Выберите сумму для пополнения:</b>\n\n"
         "⭐️ <i>Оплата через Telegram Stars</i>\n"
         "🔒 <i>Безопасно и мгновенно</i>",
-        reply_markup= bt.top_up_options(),
+        reply_markup=bt.top_up_options(),
         parse_mode="HTML"
     )
     await callback.answer()

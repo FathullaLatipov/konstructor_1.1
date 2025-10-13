@@ -71,24 +71,21 @@ def get_user_balance_db(user_id: int, bot_id: int = None):
 def get_chatgpt_bot_db_id(bot_token: str):
     """
     Bot tokenidan foydalanib bazadan ChatGPT botni topish va uning DB ID sini qaytarish
-    bot_token - Telegram bot token
-    Returns: Database ID (int) yoki None
     """
     try:
-        from modul.models import ClientBot  # Yoki sizning bot modelingiz nomi
+        from modul.models import Bot  # ✅ ClientBot emas, Bot!
 
-        # Tokendan foydalanib botni topish
-        bot = ClientBot.objects.filter(token=bot_token).first()
+        bot = Bot.objects.filter(token=bot_token).first()
 
         if bot:
-            logger.info(f"ChatGPT bot found in DB: ID={bot.id}, username={bot.username}")
-            return bot.id  # Database ID
+            logger.info(f"✅ ChatGPT bot found in DB: ID={bot.id}, username={bot.username}")
+            return bot.id
         else:
-            logger.error(f"ChatGPT bot not found with token: {bot_token[:10]}...")
+            logger.error(f"❌ ChatGPT bot not found with token: {bot_token[:10]}...")
             return None
 
     except Exception as e:
-        logger.error(f"Error getting ChatGPT bot DB ID: {e}")
+        logger.error(f"❌ Error getting ChatGPT bot DB ID: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return None
