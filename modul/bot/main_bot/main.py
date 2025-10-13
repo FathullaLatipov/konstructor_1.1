@@ -22,7 +22,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-ADMIN_CHAT_ID = 575148251
+ADMIN_CHAT_ID = 8164769517
 MAIN_BOT_USERNAME = "konstruktor_test_my_bot"
 STATS_COMMAND_ENABLED = True
 webhook_url = 'https://ismoilov299.uz/'
