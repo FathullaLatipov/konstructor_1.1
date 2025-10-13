@@ -1,4 +1,4 @@
-# modul/bot/main_bot/main.py (To'liq to'g'irlangan versiya)
+# modul/bot/main_bot/main.py
 
 import asyncio
 from datetime import datetime, timedelta
@@ -22,7 +22,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-ADMIN_CHAT_ID = 8164769517
+ADMIN_CHAT_ID = 575148251
 MAIN_BOT_USERNAME = "konstruktor_test_my_bot"
 STATS_COMMAND_ENABLED = True
 webhook_url = 'https://ismoilov299.uz/'
@@ -61,7 +61,7 @@ def validate_bot_exists(bot_db_id: int):
     Returns: (exists: bool, bot_info: dict or None)
     """
     try:
-        from modul.models import Bot
+        from modul.models import Bot  # ✅ TO'G'RI model nomi
 
         bot = Bot.objects.filter(id=bot_db_id).select_related('owner').first()
 
@@ -88,7 +88,7 @@ def validate_bot_exists(bot_db_id: int):
             return False, None
 
     except Exception as e:
-        logger.error(f"Error validating bot {bot_db_id}: {e}")
+        logger.error(f"❌ Error validating bot {bot_db_id}: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return False, None
@@ -618,6 +618,51 @@ async def send_admin_notification(bot, user_id: int, bot_db_id: int, stars_amoun
         return False
 
 
+async def send_bot_owner_notification(bot, owner_uid: int, user_id: int, bot_username: str,
+                                      stars_amount: int, rubles_amount: float, payment_id: str):
+    """Bot owner ga to'lov haqida xabar yuborish"""
+    try:
+        # Foydalanuvchi ma'lumotlarini olish
+        user_info = await get_user_info(user_id, 0)  # bot_id muhim emas bu yerda
+
+        if user_info:
+            user_name = user_info.get('first_name', 'Не указан')
+            username = user_info.get('username', 'Не указан')
+        else:
+            user_name = 'Не найден'
+            username = 'Не указан'
+
+        message = (
+            f"💰 <b>НОВОЕ ПОПОЛНЕНИЕ В ВАШЕМ БОТЕ</b>\n\n"
+            f"🤖 <b>Бот:</b> @{bot_username}\n\n"
+            f"👤 <b>Пользователь пополнил баланс:</b>\n"
+            f"• ID: <code>{user_id}</code>\n"
+            f"• Имя: {user_name}\n"
+            f"• Username: @{username}\n\n"
+            f"💎 <b>Сумма пополнения:</b>\n"
+            f"• Звезды: {stars_amount} ⭐️\n"
+            f"• Рубли: {rubles_amount}₽\n\n"
+            f"🔗 <b>ID платежа:</b> <code>{payment_id}</code>\n"
+            f"🕐 <b>Время:</b> {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n\n"
+            f"✅ Средства зачислены на баланс пользователя в вашем боте."
+        )
+
+        await bot.send_message(
+            chat_id=owner_uid,
+            text=message,
+            parse_mode="HTML"
+        )
+
+        logger.info(f"✅ Bot owner notification sent to {owner_uid} for payment {payment_id}")
+        return True
+
+    except Exception as e:
+        logger.error(f"❌ Error sending bot owner notification to {owner_uid}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
+
+
 async def send_user_notification(user_id: int, bot_id: int, amount: float):
     """Foydalanuvchiga xabar yuborish"""
     try:
@@ -1031,6 +1076,7 @@ def init_bot_handlers():
                     if success:
                         logger.info("✅ Payment saved to database")
 
+                        # Admin ga xabar
                         try:
                             await send_admin_notification(
                                 message.bot, client_user_id, bot_db_id,
@@ -1040,6 +1086,25 @@ def init_bot_handlers():
                         except Exception as e:
                             logger.error(f"⚠️ Failed to send admin notification: {e}")
 
+                        # Bot owner ga xabar
+                        if bot_info and bot_info['owner']:
+                            try:
+                                await send_bot_owner_notification(
+                                    message.bot,
+                                    owner_uid=bot_info['owner']['uid'],
+                                    user_id=client_user_id,
+                                    bot_username=bot_info['username'],
+                                    stars_amount=stars_amount,
+                                    rubles_amount=rubles_amount,
+                                    payment_id=payment_id
+                                )
+                                logger.info(f"✅ Bot owner notification sent to {bot_info['owner']['uid']}")
+                            except Exception as e:
+                                logger.error(f"⚠️ Failed to send bot owner notification: {e}")
+                        else:
+                            logger.warning(f"⚠️ No bot owner found for bot {bot_db_id}")
+
+                        # Foydalanuvchiga xabar (TODO)
                         try:
                             await send_user_notification(
                                 client_user_id, bot_db_id, rubles_amount
