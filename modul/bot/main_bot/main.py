@@ -1,4 +1,4 @@
-# modul/bot/main_bot/main.py (исправленная версия)
+# modul/bot/main_bot/main.py (To'liq to'g'irlangan versiya)
 
 import asyncio
 from datetime import datetime, timedelta
@@ -27,6 +27,7 @@ MAIN_BOT_USERNAME = "konstruktor_test_my_bot"
 STATS_COMMAND_ENABLED = True
 webhook_url = 'https://ismoilov299.uz/'
 
+
 async def main_menu():
     """Asosiy menyu klaviaturasi"""
     buttons = [
@@ -41,10 +42,56 @@ async def main_menu():
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
+
 async def registration_keyboard(registration_url):
     """Ro'yxatdan o'tish klaviaturasi"""
     buttons = [[InlineKeyboardButton(text="📝 Регистрация", url=registration_url)]]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+# ==========================================
+# UTILITY FUNCTIONS - BOT VALIDATSIYASI
+# ==========================================
+
+@sync_to_async
+def validate_bot_exists(bot_db_id: int):
+    """
+    Bot bazada mavjudligini tekshirish
+    bot_db_id - ChatGPT botning database ID si
+    Returns: (exists: bool, bot_info: dict or None)
+    """
+    try:
+        from modul.models import Bot
+
+        bot = Bot.objects.filter(id=bot_db_id).select_related('owner').first()
+
+        if bot:
+            owner_info = None
+            if bot.owner:
+                owner_info = {
+                    'uid': bot.owner.uid,
+                    'username': bot.owner.username,
+                    'first_name': bot.owner.first_name
+                }
+
+            bot_info = {
+                'id': bot.id,
+                'username': bot.username,
+                'bot_type': getattr(bot, 'bot_type', None),
+                'owner': owner_info
+            }
+
+            logger.info(f"✅ Bot validated: ID={bot_db_id}, username={bot.username}")
+            return True, bot_info
+        else:
+            logger.error(f"❌ Bot not found: ID={bot_db_id}")
+            return False, None
+
+    except Exception as e:
+        logger.error(f"Error validating bot {bot_db_id}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False, None
 
 
 @sync_to_async
@@ -57,12 +104,12 @@ def get_detailed_payment_statistics(days=7):
         now = timezone.now()
         start_date = now - timedelta(days=days)
 
-        # ✅ YANGI: Faqat musbat to'lovlar (0 va minus yo'q)
+        # Faqat musbat to'lovlar
         all_payments = PaymentTransaction.objects.filter(
             status='completed',
             created_at__gte=start_date,
-            amount_stars__gt=0,  # Faqat 0 dan katta stars
-            amount_rubles__gt=0  # Faqat musbat summalar
+            amount_stars__gt=0,
+            amount_rubles__gt=0
         ).order_by('-created_at')
 
         stats = {
@@ -77,7 +124,6 @@ def get_detailed_payment_statistics(days=7):
         detailed_payments = []
         for payment in all_payments[:50]:
             try:
-                # User ma'lumotlarini olish
                 user = User.objects.filter(uid=payment.user_id).first()
                 user_name = "Unknown"
                 user_username = "No username"
@@ -88,11 +134,9 @@ def get_detailed_payment_statistics(days=7):
                         user_name += f" {user.last_name}"
                     user_username = f"@{user.username}" if user.username else "No username"
 
-                # ✅ YANGI: Bot ma'lumotlarini olish + debug logging
                 bot = None
                 try:
                     bot = Bot.objects.filter(id=payment.bot_id).select_related('owner').first()
-                    logger.info(f"Looking for Bot with id={payment.bot_id}, found: {bot}")
                 except Exception as bot_error:
                     logger.error(f"Error finding bot {payment.bot_id}: {bot_error}")
 
@@ -105,9 +149,7 @@ def get_detailed_payment_statistics(days=7):
                 if bot:
                     bot_name = f"Bot #{bot.id}"
                     bot_username = bot.username or "unknown"
-                    logger.info(f"Bot found: id={bot.id}, username={bot.username}, owner={bot.owner}")
 
-                    # Bot egasi
                     if bot.owner:
                         owner = bot.owner
                         bot_owner_id = owner.uid
@@ -115,8 +157,6 @@ def get_detailed_payment_statistics(days=7):
                         if owner.last_name:
                             bot_owner_name += f" {owner.last_name}"
                         bot_owner_username = f"@{owner.username}" if owner.username else "No username"
-                else:
-                    logger.warning(f"Bot not found for bot_id={payment.bot_id}")
 
                 detailed_payments.append({
                     'id': payment.id,
@@ -141,22 +181,18 @@ def get_detailed_payment_statistics(days=7):
 
         stats['detailed_payments'] = detailed_payments
 
-        # ✅ YANGI: Bot statistika + debug logging
+        # Bot statistikasi
         bot_stats = []
         for bot_payment in all_payments.values('bot_id').annotate(
                 count=Count('id'),
                 total_stars=Sum('amount_stars'),
                 total_rubles=Sum('amount_rubles')
         ).order_by('-total_rubles'):
-
             try:
                 bot = Bot.objects.filter(id=bot_payment['bot_id']).select_related('owner').first()
-                logger.info(f"Bot stats - Looking for bot_id={bot_payment['bot_id']}, found: {bot}")
-
                 if bot:
                     owner_name = "Unknown"
                     owner_username = "unknown"
-
                     if bot.owner:
                         owner_name = bot.owner.first_name or "No name"
                         if bot.owner.last_name:
@@ -174,10 +210,8 @@ def get_detailed_payment_statistics(days=7):
                         'total_stars': bot_payment['total_stars'],
                         'total_rubles': bot_payment['total_rubles']
                     })
-                else:
-                    logger.warning(f"Bot not found for bot_id={bot_payment['bot_id']}")
             except Exception as e:
-                logger.error(f"Error processing bot stats for bot_id={bot_payment['bot_id']}: {e}")
+                logger.error(f"Error processing bot stats: {e}")
                 continue
 
         stats['by_bot'] = bot_stats
@@ -187,19 +221,16 @@ def get_detailed_payment_statistics(days=7):
         for i in range(days):
             day_start = now - timedelta(days=i + 1)
             day_end = now - timedelta(days=i)
-
             day_payments = all_payments.filter(
                 created_at__gte=day_start,
                 created_at__lt=day_end
             )
-
             daily_stats.append({
                 'date': day_start.strftime('%d.%m.%Y'),
                 'count': day_payments.count(),
                 'rubles': day_payments.aggregate(Sum('amount_rubles'))['amount_rubles__sum'] or 0,
                 'stars': day_payments.aggregate(Sum('amount_stars'))['amount_stars__sum'] or 0
             })
-
         stats['daily'] = daily_stats
 
         # Top users
@@ -294,9 +325,7 @@ def format_recent_payments_message(stats, limit=10):
     message = f"📋 <b>ПОСЛЕДНИЕ {limit} ПЛАТЕЖЕЙ:</b>\n"
     message += f"{'=' * 40}\n\n"
 
-    # ✅ YANGI: Bot nomini soddaroq ko'rsatish
     for idx, payment in enumerate(stats['detailed_payments'][:limit], 1):
-        # Bot nomini formatlash
         bot_display_name = f"@{payment['bot_username']}" if payment['bot_username'] != 'unknown' else payment[
             'bot_name']
 
@@ -323,6 +352,7 @@ def format_recent_payments_message(stats, limit=10):
         message += f"\n{'-' * 40}\n\n"
 
     return message
+
 
 def format_top_users_message(stats):
     """Top users xabari"""
@@ -423,6 +453,11 @@ async def schedule_weekly_reports(bot):
             logger.error(f"❌ Error in weekly report scheduler: {e}")
             await asyncio.sleep(3600)
 
+
+# ==========================================
+# DATABASE FUNCTIONS
+# ==========================================
+
 @sync_to_async
 def save_payment_to_db(user_id, source_bot_id, stars_amount, rubles_amount, payment_id, payment_date):
     """To'lovni bazaga saqlash - Django ORM"""
@@ -483,14 +518,12 @@ async def save_payment_transaction(
 def get_user_info(user_id: int, bot_id: int):
     """Foydalanuvchi ma'lumotlarini olish"""
     try:
-        # uid field ishlatish (tg_id emas!)
         user = User.objects.filter(uid=user_id).first()
 
         if user:
             return {
                 'username': user.username if user.username else 'Не указан',
                 'first_name': user.first_name if user.first_name else 'Не указан',
-                # balance field yo'q, shuning uchun 0 qaytarish
             }
         return None
     except Exception as e:
@@ -505,7 +538,6 @@ def get_user_balance(user_id: int, bot_id: int):
         from modul.models import PaymentTransaction
         from django.db.models import Sum
 
-        # Barcha to'lovlarni summalash
         total = PaymentTransaction.objects.filter(
             user_id=user_id,
             bot_id=bot_id,
@@ -519,21 +551,40 @@ def get_user_balance(user_id: int, bot_id: int):
         logger.error(f"Error calculating balance: {e}")
         return 0
 
-async def send_admin_notification(bot, user_id: int, bot_id: int, stars_amount: int, rubles_amount: float,
+
+async def send_admin_notification(bot, user_id: int, bot_db_id: int, stars_amount: int, rubles_amount: float,
                                   payment_id: str):
-    """Admin ga xabar yuborish"""
+    """Admin ga batafsil xabar yuborish - bot ma'lumotlari bilan"""
     try:
-        user_info = await get_user_info(user_id, bot_id)
+        # Foydalanuvchi ma'lumotlarini olish
+        user_info = await get_user_info(user_id, bot_db_id)
 
         if user_info:
             username = user_info.get('username', 'Не указан')
             first_name = user_info.get('first_name', 'Не указан')
-            balance = user_info.get('balance', 0)
         else:
             username = 'Не найден'
             first_name = 'Не найден'
 
-        balance = await get_user_balance(user_id, bot_id)
+        balance = await get_user_balance(user_id, bot_db_id)
+
+        # Bot ma'lumotlarini olish
+        bot_exists, bot_info = await validate_bot_exists(bot_db_id)
+
+        bot_display = f"<code>{bot_db_id}</code>"
+        bot_owner_info = ""
+
+        if bot_exists and bot_info:
+            bot_display = f"@{bot_info['username']} (ID: <code>{bot_db_id}</code>)"
+
+            if bot_info['owner']:
+                owner = bot_info['owner']
+                bot_owner_info = (
+                    f"\n\n👨‍💼 <b>Владелец бота:</b>\n"
+                    f"• ID: <code>{owner['uid']}</code>\n"
+                    f"• Имя: {owner['first_name']}\n"
+                    f"• Username: @{owner['username']}" if owner['username'] else f"• Имя: {owner['first_name']}"
+                )
 
         message = (
             f"💰 <b>НОВОЕ ПОПОЛНЕНИЕ</b>\n\n"
@@ -544,9 +595,10 @@ async def send_admin_notification(bot, user_id: int, bot_id: int, stars_amount: 
             f"💎 <b>Детали платежа:</b>\n"
             f"• Звезды: {stars_amount} ⭐️\n"
             f"• Зачислено: {rubles_amount}₽\n"
-            f"• Бот ID: {bot_id}\n"
             f"• Payment ID: <code>{payment_id}</code>\n\n"
-            f"💳 <b>Текущий баланс:</b> {balance}₽\n\n"
+            f"🤖 <b>Бот:</b> {bot_display}"
+            f"{bot_owner_info}\n\n"
+            f"💳 <b>Новый баланс пользователя:</b> {balance:.2f}₽\n\n"
             f"🕐 <b>Время:</b> {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
         )
 
@@ -561,6 +613,8 @@ async def send_admin_notification(bot, user_id: int, bot_id: int, stars_amount: 
 
     except Exception as e:
         logger.error(f"❌ Error sending admin notification: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return False
 
 
@@ -574,6 +628,10 @@ async def send_user_notification(user_id: int, bot_id: int, amount: float):
         logger.error(f"❌ Error sending user notification: {e}")
         return False
 
+
+# ==========================================
+# MAIN BOT HANDLERS
+# ==========================================
 
 def init_bot_handlers():
     @main_bot_router.message(CommandStart())
@@ -724,14 +782,27 @@ def init_bot_handlers():
             await message.answer(f"❌ Xatolik: {e}")
 
     async def handle_payment_start(message: Message, payment_args: str):
-        """Invoice yuborish"""
+        """Invoice yuborish - bot validatsiyasi bilan"""
         try:
             parts = payment_args.split("_")
 
             if len(parts) >= 4:
                 client_user_id = int(parts[1])
                 stars_amount = int(parts[2])
-                bot_id = int(parts[3])
+                bot_db_id = int(parts[3])  # Bu ChatGPT botning database ID si
+
+                # Bot mavjudligini tekshirish
+                bot_exists, bot_info = await validate_bot_exists(bot_db_id)
+
+                if not bot_exists:
+                    await message.answer(
+                        f"❌ <b>Ошибка!</b>\n\n"
+                        f"Бот с ID <code>{bot_db_id}</code> не найден в системе.\n"
+                        f"Возможно, бот был удален или ID неверный.",
+                        parse_mode="HTML"
+                    )
+                    logger.error(f"❌ Bot {bot_db_id} not found, payment cancelled")
+                    return
 
                 stars_to_rubles = {1: 5, 5: 25}
 
@@ -743,24 +814,29 @@ def init_bot_handlers():
 
                 logger.info("=" * 50)
                 logger.info("💳 CREATING INVOICE...")
-                logger.info(f"🤖 Current bot ID: {message.bot.id}")
+                logger.info(f"🤖 Main bot ID: {message.bot.id}")
                 logger.info(f"👤 Client user: {client_user_id}")
                 logger.info(f"⭐ Stars: {stars_amount}")
                 logger.info(f"💰 Rubles: {rubles_amount}")
-                logger.info(f"🔗 Source bot: {bot_id}")
+                logger.info(f"🔗 Target bot DB ID: {bot_db_id}")
+                if bot_info:
+                    logger.info(f"🤖 Bot info: @{bot_info['username']}")
+                    if bot_info['owner']:
+                        logger.info(
+                            f"👨‍💼 Bot owner: {bot_info['owner']['first_name']} (ID: {bot_info['owner']['uid']})")
                 logger.info("=" * 50)
 
                 try:
                     await message.answer_invoice(
                         title="Пополнение баланса ChatGPT бота",
                         description=f"Пополнение на {rubles_amount}₽",
-                        payload=f"gptbot_topup_{client_user_id}_{stars_amount}_{rubles_amount}_{bot_id}",
+                        payload=f"gptbot_topup_{client_user_id}_{stars_amount}_{rubles_amount}_{bot_db_id}",
                         currency="XTR",
                         prices=[LabeledPrice(label=f"{stars_amount} ⭐️", amount=stars_amount)],
                         provider_token="",
                     )
 
-                    logger.info("✅ Invoice sent!")
+                    logger.info("✅ Invoice sent successfully!")
 
                 except Exception as e:
                     logger.error(f"❌ Invoice error: {e}")
@@ -775,7 +851,9 @@ def init_bot_handlers():
                 await message.answer("❌ Неверные параметры")
 
         except Exception as e:
-            logger.error(f"❌ Error: {e}")
+            logger.error(f"❌ Error in handle_payment_start: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
 
     async def handle_auto_registration(message: Message, user):
         """Yangi foydalanuvchini avtomatik ro'yxatdan o'tkazish"""
@@ -814,14 +892,11 @@ def init_bot_handlers():
             logger.error(f"Error in auto registration for user {telegram_id}: {e}")
             return None
 
-    # ===== PAYMENT HANDLERS - ТОЛЬКО ОДИН РАЗ =====
-    
+    # ===== PAYMENT HANDLERS =====
+
     @main_bot_router.pre_checkout_query()
     async def pre_checkout_query_handler(pre_checkout_query):
-        """
-        To'lovdan oldin tekshirish
-        MUHIM: Bu handler JUDA TEZ ishlashi kerak! (< 10 sekund)
-        """
+        """To'lovdan oldin tekshirish"""
         try:
             logger.info("=" * 50)
             logger.info(f"💳 PRE-CHECKOUT QUERY received")
@@ -838,11 +913,12 @@ def init_bot_handlers():
                     client_user_id = int(parts[2])
                     stars_amount = int(parts[3])
                     rubles_amount = float(parts[4])
-                    bot_id = int(parts[5])
+                    bot_db_id = int(parts[5])
 
-                    logger.info(f"📊 Parsed: user={client_user_id}, stars={stars_amount}, rubles={rubles_amount}, bot={bot_id}")
+                    logger.info(
+                        f"📊 Parsed: user={client_user_id}, stars={stars_amount}, rubles={rubles_amount}, bot_db_id={bot_db_id}")
 
-                    # ✅ DARHOL TASDIQLASH
+                    # DARHOL TASDIQLASH
                     await pre_checkout_query.answer(ok=True)
 
                     logger.info("✅ Pre-checkout approved!")
@@ -880,7 +956,7 @@ def init_bot_handlers():
 
     @main_bot_router.message(F.successful_payment)
     async def successful_payment_handler(message: Message):
-        """Muvaffaqiyatli to'lov handleri"""
+        """Muvaffaqiyatli to'lov handleri - bot validatsiyasi bilan"""
         try:
             logger.info("=" * 50)
             logger.info(f"✅ SUCCESSFUL PAYMENT received")
@@ -899,18 +975,53 @@ def init_bot_handlers():
                 client_user_id = int(parts[2])
                 stars_amount = int(parts[3])
                 rubles_amount = float(parts[4])
-                bot_id = int(parts[5])
+                bot_db_id = int(parts[5])
 
                 logger.info(f"📊 Payment details:")
                 logger.info(f"  - Client: {client_user_id}")
                 logger.info(f"  - Stars: {stars_amount}")
                 logger.info(f"  - Rubles: {rubles_amount}")
-                logger.info(f"  - Bot ID: {bot_id}")
+                logger.info(f"  - Bot DB ID: {bot_db_id}")
+
+                # Bot mavjudligini tekshirish
+                bot_exists, bot_info = await validate_bot_exists(bot_db_id)
+
+                if not bot_exists:
+                    logger.error(f"❌ Bot {bot_db_id} not found during payment processing!")
+                    await message.answer(
+                        f"⚠️ <b>Оплата получена, но бот не найден!</b>\n\n"
+                        f"💎 Оплачено: {stars_amount} ⭐️\n"
+                        f"💰 Сумма: {rubles_amount}₽\n"
+                        f"🔗 ID платежа: <code>{payment_id}</code>\n\n"
+                        f"📞 Обратитесь к администратору.",
+                        parse_mode="HTML"
+                    )
+
+                    # Admin ga xabar
+                    try:
+                        await message.bot.send_message(
+                            chat_id=ADMIN_CHAT_ID,
+                            text=f"⚠️ <b>ВНИМАНИЕ: Платеж для несуществующего бота!</b>\n\n"
+                                 f"👤 User ID: <code>{client_user_id}</code>\n"
+                                 f"🤖 Bot DB ID: <code>{bot_db_id}</code>\n"
+                                 f"💰 Сумма: {rubles_amount}₽\n"
+                                 f"🔗 Payment ID: <code>{payment_id}</code>\n\n"
+                                 f"❌ Bot не найден в базе!",
+                            parse_mode="HTML"
+                        )
+                    except Exception as admin_error:
+                        logger.error(f"Failed to notify admin: {admin_error}")
+
+                    return
+
+                logger.info(f"✅ Bot validated: @{bot_info['username']}")
+                if bot_info['owner']:
+                    logger.info(f"👨‍💼 Owner: {bot_info['owner']['first_name']} (ID: {bot_info['owner']['uid']})")
 
                 try:
                     success = await save_payment_transaction(
                         user_id=client_user_id,
-                        source_bot_id=bot_id,
+                        source_bot_id=bot_db_id,
                         stars_amount=stars_amount,
                         rubles_amount=rubles_amount,
                         payment_id=payment_id,
@@ -922,7 +1033,7 @@ def init_bot_handlers():
 
                         try:
                             await send_admin_notification(
-                                message.bot, client_user_id, bot_id,
+                                message.bot, client_user_id, bot_db_id,
                                 stars_amount, rubles_amount, payment_id
                             )
                             logger.info("✅ Admin notification sent")
@@ -931,7 +1042,7 @@ def init_bot_handlers():
 
                         try:
                             await send_user_notification(
-                                client_user_id, bot_id, rubles_amount
+                                client_user_id, bot_db_id, rubles_amount
                             )
                             logger.info("✅ User notification sent")
                         except Exception as e:
@@ -942,9 +1053,9 @@ def init_bot_handlers():
                             f"💎 Оплачено: {stars_amount} ⭐️\n"
                             f"💰 Сумма: {rubles_amount}₽\n"
                             f"👤 Пользователь: <code>{client_user_id}</code>\n"
-                            f"🤖 Через бот: <code>{bot_id}</code>\n"
+                            f"🤖 Бот: @{bot_info['username']}\n"
                             f"🔗 ID платежа: <code>{payment_id}</code>\n\n"
-                            f"📊 Платеж успешно обработан!",
+                            f"📊 Баланс успешно пополнен!",
                             parse_mode="HTML"
                         )
 
@@ -989,7 +1100,7 @@ def init_bot_handlers():
             logger.info("=" * 50)
 
     # ===== OTHER HANDLERS =====
-    
+
     @main_bot_router.callback_query(F.data == "back_to_main")
     async def back_to_main(callback: CallbackQuery, state: FSMContext):
         """Asosiy menyuga qaytish"""

@@ -21,7 +21,8 @@ from modul.clientbot.handlers.chat_gpt_bot.shortcuts import (get_all_names, get_
                                                              get_info_db, get_user_balance_db,
                                                              default_checker, update_bc,
                                                              update_bc_name, get_channels_with_type_for_check,
-                                                             remove_sponsor_channel, process_chatgpt_referral_bonus)
+                                                             remove_sponsor_channel, process_chatgpt_referral_bonus,
+                                                             get_chatgpt_bot_db_id)
 
 robot = ChatGPT()
 
@@ -486,12 +487,18 @@ async def chat_3_callback(callback: types.CallbackQuery):
 
 @client_bot_router.callback_query(F.data.in_(['not', 'with', 'not4', 'with4', 'again_gpt3', 'again_gpt4']))
 async def chat_options_callback(callback: types.CallbackQuery, state: FSMContext):
-    """GPT tanlov - YANGILANGAN"""
+    """GPT tanlov - bot_db_id bilan"""
     user_id = callback.from_user.id
-    bot_id = callback.bot.id  # Bot ID
 
-    # Balansni tekshirish (PaymentTransaction + eski referal)
-    user_balance = await get_user_balance_db(user_id, bot_id)
+    # Bazadan bot DB ID sini olish
+    bot_db_id = await get_chatgpt_bot_db_id(callback.bot.token)
+
+    if not bot_db_id:
+        await callback.answer("❌ Ошибка: бот не найден", show_alert=True)
+        return
+
+    # Balansni tekshirish
+    user_balance = await get_user_balance_db(user_id, bot_db_id)
 
     # Narxlar
     prices = {
@@ -504,8 +511,8 @@ async def chat_options_callback(callback: types.CallbackQuery, state: FSMContext
     price = prices.get(callback.data, 1)
 
     if user_balance >= price:
-        # Balansdan yechish (PaymentTransaction ga yoziladi)
-        success = await update_bc(tg_id=user_id, sign='-', amount=price, bot_id=bot_id)
+        # Balansdan yechish
+        success = await update_bc(tg_id=user_id, sign='-', amount=price, bot_id=bot_db_id)
 
         if success:
             # State o'rnatish
@@ -736,13 +743,19 @@ def get_user_balance_db(user_id: int, bot_id: int):
 
 @client_bot_router.callback_query(F.data == "show_balance")
 async def show_balance_callback(callback: types.CallbackQuery):
-    """Balansni ko'rsatish"""
+    """Balansni ko'rsatish - bazadan bot ID olish"""
     user_id = callback.from_user.id
-    bot_id = callback.bot.id
+
+    # Bazadan bot DB ID sini olish
+    bot_db_id = await get_chatgpt_bot_db_id(callback.bot.token)
+
+    if not bot_db_id:
+        await callback.answer("❌ Ошибка: бот не найден в базе данных", show_alert=True)
+        return
 
     try:
-        # Jami balance (PaymentTransaction + referal)
-        user_balance = await get_user_balance_db(user_id, bot_id)
+        # Balansni olish (endi bot_db_id ishlatiladi)
+        user_balance = await get_user_balance_db(user_id, bot_db_id)
 
         await callback.message.edit_text(
             f"💰 <b>Ваш баланс:</b> {user_balance:.2f}₽\n\n"
@@ -778,6 +791,7 @@ async def top_up_balance_callback(callback: types.CallbackQuery):
 
 @client_bot_router.callback_query(F.data.startswith("topup_"))
 async def topup_redirect_callback(callback: types.CallbackQuery):
+    """Stars orqali to'lov - bazadan bot DB ID sini olish"""
     stars_amount = callback.data.replace("topup_", "").replace("_star", "").replace("_stars", "")
     stars_to_rubles = {
         "1": "5",
@@ -785,7 +799,15 @@ async def topup_redirect_callback(callback: types.CallbackQuery):
     }
     rubles = stars_to_rubles.get(stars_amount, "5")
     main_bot_username = "konstruktor_test_my_bot"
-    bot_id = callback.bot.id
+
+    bot_db_id = await get_chatgpt_bot_db_id(callback.bot.token)
+
+    if not bot_db_id:
+        await callback.answer("❌ Ошибка: бот не найден в базе данных", show_alert=True)
+        logger.error(f"Bot DB ID not found for token: {callback.bot.token[:10]}...")
+        return
+
+    logger.info(f"User {callback.from_user.id} redirecting to payment: {stars_amount} stars, bot_db_id={bot_db_id}")
 
     await callback.message.edit_text(
         f"💎 <b>Пополнение на {stars_amount} Stars ({rubles}₽)</b>\n\n"
@@ -793,7 +815,8 @@ async def topup_redirect_callback(callback: types.CallbackQuery):
         f"👇 Нажмите кнопку ниже",
         reply_markup=InlineKeyboardBuilder().button(
             text=f"💳 Перейти к оплате ({stars_amount} ⭐️)",
-            url=f"https://t.me/{main_bot_username}?start=gptbot_{callback.from_user.id}_{stars_amount}_{bot_id}"        ).as_markup(),
+            url=f"https://t.me/{main_bot_username}?start=gptbot_{callback.from_user.id}_{stars_amount}_{bot_db_id}"
+        ).as_markup(),
         parse_mode="HTML"
     )
 

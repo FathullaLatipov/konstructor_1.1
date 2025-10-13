@@ -26,7 +26,6 @@ def get_user_balance_db(user_id: int, bot_id: int = None):
     PaymentTransaction dan to'lovlarni hisoblaydi + eski referal balance
     """
     try:
-        # 1. PaymentTransaction dan balance (to'lovlar va GPT yechimlar)
         from modul.models import PaymentTransaction
         from django.db.models import Sum
 
@@ -42,10 +41,8 @@ def get_user_balance_db(user_id: int, bot_id: int = None):
 
             payment_balance = float(total['total']) if total['total'] else 0.0
 
-        # 2. Eski referal balance (o'zgarmaydi)
         try:
-            # Sizning eski referal sistemangiz
-            # Masalan: ChatGPTBotUser modeli yoki boshqa
+
             from modul.models import ChatGPTBotUser
             user = ChatGPTBotUser.objects.filter(user_id=user_id).first()
             referral_balance = float(user.balance) if user and hasattr(user, 'balance') else 0.0
@@ -68,6 +65,33 @@ def get_user_balance_db(user_id: int, bot_id: int = None):
         import traceback
         logger.error(traceback.format_exc())
         return 0.0
+
+
+@sync_to_async
+def get_chatgpt_bot_db_id(bot_token: str):
+    """
+    Bot tokenidan foydalanib bazadan ChatGPT botni topish va uning DB ID sini qaytarish
+    bot_token - Telegram bot token
+    Returns: Database ID (int) yoki None
+    """
+    try:
+        from modul.models import ClientBot  # Yoki sizning bot modelingiz nomi
+
+        # Tokendan foydalanib botni topish
+        bot = ClientBot.objects.filter(token=bot_token).first()
+
+        if bot:
+            logger.info(f"ChatGPT bot found in DB: ID={bot.id}, username={bot.username}")
+            return bot.id  # Database ID
+        else:
+            logger.error(f"ChatGPT bot not found with token: {bot_token[:10]}...")
+            return None
+
+    except Exception as e:
+        logger.error(f"Error getting ChatGPT bot DB ID: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return None
 
 
 @sync_to_async

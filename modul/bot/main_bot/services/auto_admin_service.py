@@ -177,3 +177,42 @@ def create_bot_with_auto_admin(owner_uid: int, token: str, username: str, module
     except Exception as e:
         logger.error(f"Error creating bot with auto admin for owner {owner_uid}: {e}")
         return None
+
+
+@sync_to_async
+def validate_bot_exists(bot_db_id: int):
+    """
+    Returns: (exists: bool, bot_info: dict or None)
+    """
+    try:
+        from modul.models import Bot  # Sizning bot modelingiz
+
+        bot = Bot.objects.filter(id=bot_db_id).select_related('owner').first()
+
+        if bot:
+            owner_info = None
+            if bot.owner:
+                owner_info = {
+                    'uid': bot.owner.uid,
+                    'username': bot.owner.username,
+                    'first_name': bot.owner.first_name
+                }
+
+            bot_info = {
+                'id': bot.id,
+                'username': bot.username,
+                'bot_type': getattr(bot, 'bot_type', None),
+                'owner': owner_info
+            }
+
+            logger.info(f"✅ Bot validated: ID={bot_db_id}, username={bot.username}")
+            return True, bot_info
+        else:
+            logger.error(f"❌ Bot not found: ID={bot_db_id}")
+            return False, None
+
+    except Exception as e:
+        logger.error(f"Error validating bot {bot_db_id}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False, None
