@@ -63,34 +63,72 @@ def save_user(u, bot: Bot, link=None, inviter=None):
         raise
 
 @sync_to_async
-def get_user_balance_db(user_id: int, bot_id: int):
+def get_user_balance_db(user_id: int, bot_id):
     """
-    Foydalanuvchining balansini hisoblash (Stars da)
+    Foydalanuvchining balansini hisoblash (Flexible - ID yoki Token)
     user_id - foydalanuvchi Telegram ID si
-    bot_id - qaysi bot uchun balans (database ID)
+    bot_id - Bot database ID yoki Bot token (ikkalasi ham ishlaydi)
     Returns: Balance in Stars (float)
     """
     try:
-        from modul.models import PaymentTransaction
+        from modul.models import PaymentTransaction, Bot
         from django.db.models import Sum
 
-        # Barcha to'lovlarni summalash - faqat Stars
-        total = PaymentTransaction.objects.filter(
-            user_id=user_id,
-            bot_id=bot_id,
-            status='completed'
-        ).aggregate(total_stars=Sum('amount_stars'))
+        actual_bot_id = None
 
-        balance = float(total['total_stars']) if total['total_stars'] else 0.0
+        # 1. Avval to'g'ridan-to'g'ri database ID deb tekshiramiz
+        if isinstance(bot_id, int):
+            logger.info(f"🔍 Checking as database ID: {bot_id}")
 
-        logger.info(f"✅ Balance for user {user_id} in bot {bot_id}: {balance:.0f} ⭐️")
-        return balance
+            total = PaymentTransaction.objects.filter(
+                user_id=user_id,
+                bot_id=bot_id,
+                status='completed'
+            ).aggregate(total_stars=Sum('amount_stars'))
+
+            if total['total_stars'] is not None and total['total_stars'] > 0:
+                balance = float(total['total_stars'])
+                logger.info(f"✅ Balance found by ID: user={user_id}, bot_id={bot_id}, balance={balance:.0f} ⭐️")
+                return balance
+            else:
+                logger.info(f"⚠️ No balance found by database ID {bot_id}, trying as token...")
+                actual_bot_id = bot_id
+
+        # 2. Token deb tekshiramiz
+        logger.info(f"🔍 Looking up bot by token: {str(bot_id)[:15]}...")
+
+        bot = Bot.objects.filter(token=str(bot_id)).first()
+
+        if bot:
+            logger.info(f"✅ Bot found by token: database ID={bot.id}")
+            actual_bot_id = bot.id
+
+            # Database ID bilan qayta qidiramiz
+            total = PaymentTransaction.objects.filter(
+                user_id=user_id,
+                bot_id=actual_bot_id,
+                status='completed'
+            ).aggregate(total_stars=Sum('amount_stars'))
+
+            balance = float(total['total_stars']) if total['total_stars'] else 0.0
+            logger.info(f"✅ Balance for user {user_id} in bot {actual_bot_id} (via token): {balance:.0f} ⭐️")
+            return balance
+        else:
+            logger.warning(f"⚠️ Bot not found by token: {str(bot_id)[:15]}...")
+
+            if actual_bot_id:
+                logger.info(f"ℹ️ Returning 0 balance for user {user_id} in bot {actual_bot_id}")
+                return 0.0
+            else:
+                logger.error(f"❌ Bot not found with identifier: {bot_id}")
+                return 0.0
 
     except Exception as e:
-        logger.error(f"❌ Error getting balance for user {user_id} in bot {bot_id}: {e}")
+        logger.error(f"❌ Error getting balance for user {user_id}: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return 0.0
+
 async def start(message: Message, state: FSMContext, bot: Bot):
     try:
         bot_db = await shortcuts.get_bot(bot)
@@ -117,7 +155,7 @@ async def start(message: Message, state: FSMContext, bot: Bot):
             builder = InlineKeyboardBuilder()
             user_id = message.from_user.id
             bot_id = message.bot.id
-            user_balance = await get_user_balance_db(user_id, bot_id)
+            user_balance = await get_user_balance_db(user_id, bot.token)
             builder.button(text='☁ Чат с GPT-4', callback_data='chat_4')
             builder.button(text='☁ Чат с GPT-3.5', callback_data='chat_3')
             builder.button(text='💰 Баланс', callback_data='show_balance')

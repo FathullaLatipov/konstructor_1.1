@@ -590,26 +590,45 @@ async def schedule_weekly_reports(bot):
 @sync_to_async
 def save_payment_to_db(user_id, source_bot_id, stars_amount, payment_id, payment_date):
     """
-    To'lovni bazaga saqlash - faqat Stars
-    amount_rubles ni stars bilan bir xil qilamiz (yoki 0)
+    To'lovni bazaga saqlash (Flexible - ID yoki Token)
+    source_bot_id - Bot database ID yoki Bot token (ikkalasi ham ishlaydi)
     """
     try:
-        from modul.models import PaymentTransaction
+        from modul.models import PaymentTransaction, Bot
 
+        actual_bot_id = None
+
+        # 1. Int bo'lsa, to'g'ridan-to'g'ri database ID
+        if isinstance(source_bot_id, int):
+            logger.info(f"💾 Using bot_id directly: {source_bot_id}")
+            actual_bot_id = source_bot_id
+        else:
+            # 2. Token dan database ID ni topamiz
+            logger.info(f"🔍 Looking up bot by token...")
+            bot = Bot.objects.filter(token=str(source_bot_id)).first()
+
+            if bot:
+                actual_bot_id = bot.id
+                logger.info(f"✅ Bot found: database ID={actual_bot_id}")
+            else:
+                logger.error(f"❌ Bot not found with token: {str(source_bot_id)[:15]}...")
+                return False
+
+        # To'lovni saqlash
         payment = PaymentTransaction.objects.create(
             user_id=user_id,
-            bot_id=source_bot_id,
+            bot_id=actual_bot_id,
             amount_stars=stars_amount,
-            amount_rubles=stars_amount,  # Yoki 0 qilishingiz mumkin
+            amount_rubles=stars_amount,  # Yoki 0
             payment_id=payment_id,
             status='completed'
         )
 
-        logger.info(f"✅ Payment saved to DB: ID={payment.id}, Stars={stars_amount} ⭐️")
+        logger.info(f"✅ Payment saved: ID={payment.id}, user={user_id}, bot={actual_bot_id}, stars={stars_amount} ⭐️")
         return True
 
     except Exception as e:
-        logger.error(f"❌ Failed to save payment to DB: {e}")
+        logger.error(f"❌ Failed to save payment: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return False
@@ -617,13 +636,14 @@ def save_payment_to_db(user_id, source_bot_id, stars_amount, payment_id, payment
 
 async def save_payment_transaction(
         user_id: int,
-        source_bot_id: int,
+        source_bot_id,  # Flexible: int yoki str
         stars_amount: int,
         payment_id: str,
         payment_date
 ) -> bool:
     """
-    To'lovni saqlash - wrapper (Stars only)
+    To'lovni saqlash - wrapper (Flexible)
+    source_bot_id - Bot database ID yoki Bot token
     """
     try:
         logger.info(f"💾 Saving payment...")
@@ -637,9 +657,7 @@ async def save_payment_transaction(
 
         if result:
             logger.info("✅ Payment saved successfully")
-
         return result
-
     except Exception as e:
         logger.error(f"❌ Error saving payment: {e}")
         import traceback
