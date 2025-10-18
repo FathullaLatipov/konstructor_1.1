@@ -65,7 +65,9 @@ async def registration_keyboard(registration_url):
 
 @sync_to_async
 def get_user_payment_history(user_uid: int):
-    """Foydalanuvchining o'z GPT botlaridagi to'lovlar tarixini olish"""
+    """
+    Foydalanuvchining o'z GPT botlaridagi to'lovlar tarixini olish - Stars only
+    """
     try:
         from modul.models import PaymentTransaction, Bot
         from django.db.models import Sum, Count
@@ -93,11 +95,10 @@ def get_user_payment_history(user_uid: int):
             logger.info(f"No payments found for user {user_uid} bots")
             return None
 
-        # Umumiy statistika
+        # Umumiy statistika - faqat Stars
         total_stats = payments.aggregate(
             total_payments=Count('id'),
             total_stars=Sum('amount_stars'),
-            total_rubles=Sum('amount_rubles'),
             unique_users=Count('user_id', distinct=True)
         )
 
@@ -106,9 +107,8 @@ def get_user_payment_history(user_uid: int):
         for bot_payment in payments.values('bot_id').annotate(
                 count=Count('id'),
                 total_stars=Sum('amount_stars'),
-                total_rubles=Sum('amount_rubles'),
                 unique_users=Count('user_id', distinct=True)
-        ).order_by('-total_rubles'):
+        ).order_by('-total_stars'):
 
             try:
                 bot = Bot.objects.filter(id=bot_payment['bot_id']).first()
@@ -118,7 +118,6 @@ def get_user_payment_history(user_uid: int):
                         'bot_username': bot.username or f"Bot #{bot.id}",
                         'count': bot_payment['count'],
                         'total_stars': bot_payment['total_stars'],
-                        'total_rubles': bot_payment['total_rubles'],
                         'unique_users': bot_payment['unique_users']
                     })
             except Exception as e:
@@ -145,8 +144,7 @@ def get_user_payment_history(user_uid: int):
                     'bot_username': bot_username,
                     'user_id': payment.user_id,
                     'user_name': user_name,
-                    'stars': payment.amount_stars,
-                    'rubles': payment.amount_rubles
+                    'stars': payment.amount_stars
                 })
             except Exception as e:
                 logger.error(f"Error processing payment: {e}")
@@ -236,10 +234,14 @@ def validate_bot_exists(bot_db_id: int):
 
 @sync_to_async
 def get_detailed_payment_statistics(days=7):
-    """To'lovlar statistikasini batafsil olish"""
+    """
+    To'lovlar statistikasini batafsil olish - Stars only
+    """
     try:
         from modul.models import PaymentTransaction, User, Bot
-        from django.db.models import Sum, Count, Q, F as DjangoF
+        from django.db.models import Sum, Count
+        from django.utils import timezone
+        from datetime import timedelta
 
         now = timezone.now()
         start_date = now - timedelta(days=days)
@@ -248,14 +250,12 @@ def get_detailed_payment_statistics(days=7):
         all_payments = PaymentTransaction.objects.filter(
             status='completed',
             created_at__gte=start_date,
-            amount_stars__gt=0,
-            amount_rubles__gt=0
+            amount_stars__gt=0
         ).order_by('-created_at')
 
         stats = {
             'total_payments': all_payments.count(),
             'total_stars': all_payments.aggregate(Sum('amount_stars'))['amount_stars__sum'] or 0,
-            'total_rubles': all_payments.aggregate(Sum('amount_rubles'))['amount_rubles__sum'] or 0,
             'unique_users': all_payments.values('user_id').distinct().count(),
             'unique_bots': all_payments.values('bot_id').distinct().count(),
         }
@@ -311,8 +311,7 @@ def get_detailed_payment_statistics(days=7):
                     'bot_owner_id': bot_owner_id,
                     'bot_owner_name': bot_owner_name,
                     'bot_owner_username': bot_owner_username,
-                    'stars': payment.amount_stars,
-                    'rubles': payment.amount_rubles,
+                    'stars': payment.amount_stars
                 })
 
             except Exception as e:
@@ -325,9 +324,8 @@ def get_detailed_payment_statistics(days=7):
         bot_stats = []
         for bot_payment in all_payments.values('bot_id').annotate(
                 count=Count('id'),
-                total_stars=Sum('amount_stars'),
-                total_rubles=Sum('amount_rubles')
-        ).order_by('-total_rubles'):
+                total_stars=Sum('amount_stars')
+        ).order_by('-total_stars'):
             try:
                 bot = Bot.objects.filter(id=bot_payment['bot_id']).select_related('owner').first()
                 if bot:
@@ -347,8 +345,7 @@ def get_detailed_payment_statistics(days=7):
                         'owner_name': owner_name,
                         'owner_username': owner_username,
                         'count': bot_payment['count'],
-                        'total_stars': bot_payment['total_stars'],
-                        'total_rubles': bot_payment['total_rubles']
+                        'total_stars': bot_payment['total_stars']
                     })
             except Exception as e:
                 logger.error(f"Error processing bot stats: {e}")
@@ -368,7 +365,6 @@ def get_detailed_payment_statistics(days=7):
             daily_stats.append({
                 'date': day_start.strftime('%d.%m.%Y'),
                 'count': day_payments.count(),
-                'rubles': day_payments.aggregate(Sum('amount_rubles'))['amount_rubles__sum'] or 0,
                 'stars': day_payments.aggregate(Sum('amount_stars'))['amount_stars__sum'] or 0
             })
         stats['daily'] = daily_stats
@@ -376,10 +372,9 @@ def get_detailed_payment_statistics(days=7):
         # Top users
         top_users_data = []
         for user_payment in all_payments.values('user_id').annotate(
-                total_rubles=Sum('amount_rubles'),
-                total_payments=Count('id'),
-                total_stars=Sum('amount_stars')
-        ).order_by('-total_rubles')[:10]:
+                total_stars=Sum('amount_stars'),
+                total_payments=Count('id')
+        ).order_by('-total_stars')[:10]:
 
             try:
                 user = User.objects.filter(uid=user_payment['user_id']).first()
@@ -397,9 +392,8 @@ def get_detailed_payment_statistics(days=7):
                     'user_id': user_payment['user_id'],
                     'user_name': user_name,
                     'user_username': user_username,
-                    'total_rubles': user_payment['total_rubles'],
-                    'total_payments': user_payment['total_payments'],
-                    'total_stars': user_payment['total_stars']
+                    'total_stars': user_payment['total_stars'],
+                    'total_payments': user_payment['total_payments']
                 })
             except Exception as e:
                 logger.error(f"Error processing top user: {e}")
@@ -594,8 +588,11 @@ async def schedule_weekly_reports(bot):
 # ==========================================
 
 @sync_to_async
-def save_payment_to_db(user_id, source_bot_id, stars_amount, rubles_amount, payment_id, payment_date):
-    """To'lovni bazaga saqlash - Django ORM"""
+def save_payment_to_db(user_id, source_bot_id, stars_amount, payment_id, payment_date):
+    """
+    To'lovni bazaga saqlash - faqat Stars
+    amount_rubles ni stars bilan bir xil qilamiz (yoki 0)
+    """
     try:
         from modul.models import PaymentTransaction
 
@@ -603,12 +600,12 @@ def save_payment_to_db(user_id, source_bot_id, stars_amount, rubles_amount, paym
             user_id=user_id,
             bot_id=source_bot_id,
             amount_stars=stars_amount,
-            amount_rubles=rubles_amount,
+            amount_rubles=stars_amount,  # Yoki 0 qilishingiz mumkin
             payment_id=payment_id,
             status='completed'
         )
 
-        logger.info(f"✅ Payment saved to DB: ID={payment.id}")
+        logger.info(f"✅ Payment saved to DB: ID={payment.id}, Stars={stars_amount} ⭐️")
         return True
 
     except Exception as e:
@@ -622,19 +619,20 @@ async def save_payment_transaction(
         user_id: int,
         source_bot_id: int,
         stars_amount: int,
-        rubles_amount: float,
         payment_id: str,
         payment_date
 ) -> bool:
-    """To'lovni saqlash - wrapper"""
+    """
+    To'lovni saqlash - wrapper (Stars only)
+    """
     try:
         logger.info(f"💾 Saving payment...")
         logger.info(f"  User: {user_id}, Bot: {source_bot_id}")
-        logger.info(f"  Amount: {rubles_amount}₽, Payment ID: {payment_id}")
+        logger.info(f"  Amount: {stars_amount} ⭐️, Payment ID: {payment_id}")
 
         result = await save_payment_to_db(
             user_id, source_bot_id, stars_amount,
-            rubles_amount, payment_id, payment_date
+            payment_id, payment_date
         )
 
         if result:
@@ -647,6 +645,8 @@ async def save_payment_transaction(
         import traceback
         logger.error(traceback.format_exc())
         return False
+
+
 
 
 @sync_to_async
