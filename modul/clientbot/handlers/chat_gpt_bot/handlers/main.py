@@ -219,7 +219,6 @@ async def tp_to_start(message: types.Message, bot: Bot, state: FSMContext):
 async def start_message(message: types.Message, state: FSMContext, bot: Bot):
     user_id = message.from_user.id
 
-    # Admin buyruq
     if message.text == "/adminpayamount":
         await message.answer('Пришли токен')
         await state.set_state(AiAdminState.check_token_and_update)
@@ -228,14 +227,14 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
 
     print(await state.get_state())
 
-    # Referral linkni tekshirish
     referral = None
     if message.text and message.text.startswith('/start '):
-        args = message.text[7:]  # "/start " dan keyingi qism
+        args = message.text[7:]
         if args and args.isdigit():
             referral = args
             await state.update_data(referral=referral)
             print(f"Extracted referral: {referral}")
+
     channels = await get_channels_with_type_for_check()
     print(f"📡 Found channels: {channels}")
 
@@ -256,7 +255,6 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
 
                 if member.status == "left":
                     try:
-                        # Chat info ni ham to'g'ri bot orqali olish
                         if channel_type == 'system':
                             chat_info = await main_bot.get_chat(chat_id=int(channel_id))
                         else:
@@ -277,7 +275,6 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
             except Exception as e:
                 logger.error(f"Error checking channel {channel_id} (type: {channel_type}): {e}")
 
-                # Faqat sponsor kanallarni o'chirish
                 if channel_type == 'sponsor':
                     invalid_channels_to_remove.append(channel_id)
                     logger.info(f"Added invalid sponsor channel {channel_id} to removal list")
@@ -285,7 +282,6 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
                     logger.warning(f"System channel {channel_id} error (ignoring): {e}")
                 continue
 
-        # Invalid sponsor kanallarni o'chirish
         if invalid_channels_to_remove:
             for channel_id in invalid_channels_to_remove:
                 await remove_sponsor_channel(channel_id)
@@ -319,13 +315,16 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
     try:
         result = await get_info_db(user_id)
         print(f"User {user_id} found in database: {result}")
-        await message.answer(f'Привет {message.from_user.username}\nВаш баланс - {result[0][2]}',
-                             reply_markup=bt.first_buttons())
+        await message.answer(
+            f'Привет {message.from_user.username}\nВаш баланс - {result[0][2]} ⭐️',
+            reply_markup=bt.first_buttons()
+        )
     except:
         print(f"User {user_id} not found, creating new user")
         new_link = await create_start_link(message.bot, str(message.from_user.id), encode=True)
         link_for_db = new_link[new_link.index("=") + 1:]
         await save_user(u=message.from_user, bot=bot, link=link_for_db, referrer_id=referral)
+
         if referral and referral.isdigit():
             ref_id = int(referral)
             if ref_id != user_id:
@@ -342,7 +341,7 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
                         await bot.send_message(
                             chat_id=ref_id,
                             text=f"У вас новый реферал! <a href='{user_profile_link}'>{user_name}</a>\n"
-                                 f"💰 Получено: {reward}₽",
+                                 f"💰 Получено: {reward} ⭐️",
                             parse_mode="HTML"
                         )
                         print(f"📨 Sent referral notification to {ref_id} about user {user_id}")
@@ -352,12 +351,12 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
         result = await get_info_db(user_id)
         print(f"New user {user_id} created: {result}")
 
-        await message.answer(f'Привет {message.from_user.username}\nВаш баланс - {result[0][2]}',
-                             reply_markup=bt.first_buttons())
+        await message.answer(
+            f'Привет {message.from_user.username}\nВаш баланс - {result[0][2]} ⭐️',
+            reply_markup=bt.first_buttons()
+        )
 
-    # State ni tozalash
     await state.clear()
-
 
 @client_bot_router.callback_query(F.data == "check_chan_chatgpt", ChatGptFilter())
 async def check_channels_chatgpt_callback(callback: CallbackQuery, state: FSMContext, bot: Bot):
@@ -465,9 +464,9 @@ async def chat_4_callback(callback_query: types.CallbackQuery):
         '📋 Используется самая последняя языковая модель GPT-4 Turbo.\n'
         '🔘 Принимает текст.\n'
         '🗯 Чат без контекста — не учитывает контекст, каждый ваш запрос как новый диалог.\n'
-        '⚡️ 1 запрос = 3 ₽/⭐️\n'
+        '⚡️ 1 запрос = 3 ⭐️\n'
         '💬 Чат с контекстом — каждый ответ с учетом контекста вашего диалога.\n'
-        '⚡️ 1 запрос = 4 ₽/⭐️\n'
+        '⚡️ 1 запрос = 4 ⭐️\n'
         '└ Выберите чат:',
         reply_markup=bt.choice_1_4()
     )
@@ -480,12 +479,11 @@ async def chat_3_callback(callback: types.CallbackQuery):
         '📋 Используется самая экономически эффективная модель GPT-3.5 Turbo.\n'
         '🔘 Принимает текстовое сообщение.\n'
         '🗯 Чат без контекста — не учитывает контекст, каждый ваш запрос как новый диалог.\n'
-        '⚡️ 1 запрос = 1 ₽/⭐️\n'
+        '⚡️ 1 запрос = 1 ⭐️\n'
         '💬 Чат с контекстом — каждый ответ с учетом контекста вашего диалога.\n'
-        '⚡️ 1 запрос = 2 ₽/⭐️',
+        '⚡️ 1 запрос = 2 ⭐️',
         reply_markup=bt.choice_1_3_5()
     )
-
 
 # ==========================================
 # UTILITY FUNCTIONS
@@ -554,20 +552,18 @@ def get_user_balance_db(user_id: int, bot_id: int):
 
 @client_bot_router.callback_query(F.data.in_(['not', 'with', 'not4', 'with4', 'again_gpt3', 'again_gpt4']))
 async def chat_options_callback(callback: types.CallbackQuery, state: FSMContext):
-    """GPT tanlov - bot_db_id bilan"""
+    """GPT tanlov - faqat Stars narxi"""
     user_id = callback.from_user.id
 
-    # Bazadan bot DB ID sini olish
     bot_db_id = await get_chatgpt_bot_db_id(callback.bot.token)
 
     if not bot_db_id:
         await callback.answer("❌ Ошибка: бот не найден", show_alert=True)
         return
 
-    # Balansni tekshirish
     user_balance = await get_user_balance_db(user_id, bot_db_id)
 
-    # Narxlar
+    # Narxlar - Stars da
     prices = {
         'not': 1, 'again_gpt3': 1,
         'with': 2,
@@ -578,11 +574,9 @@ async def chat_options_callback(callback: types.CallbackQuery, state: FSMContext
     price = prices.get(callback.data, 1)
 
     if user_balance >= price:
-        # Balansdan yechish
         success = await update_bc(tg_id=user_id, sign='-', amount=price, bot_id=bot_db_id)
 
         if success:
-            # State o'rnatish
             if callback.data in ['not', 'again_gpt3']:
                 await callback.message.answer('Пришлите свой запрос:')
                 await state.set_state('waiting_for_gpt3')
@@ -603,8 +597,8 @@ async def chat_options_callback(callback: types.CallbackQuery, state: FSMContext
     else:
         await callback.message.answer(
             f'Недостаточно средств!\n\n'
-            f'Ваш баланс: {user_balance:.2f}₽\n'
-            f'Необходимо: {price}₽\n\n'
+            f'Ваш баланс: {user_balance:.0f} ⭐️\n'
+            f'Необходимо: {price} ⭐️\n\n'
             f'Пополните баланс.'
         )
 
@@ -780,10 +774,9 @@ async def gpt4(message: Message, state: FSMContext):
 
 @client_bot_router.callback_query(F.data == "show_balance")
 async def show_balance_callback(callback: types.CallbackQuery):
-    """Balansni ko'rsatish - bazadan bot ID olish"""
+    """Balansni ko'rsatish - faqat Stars"""
     user_id = callback.from_user.id
 
-    # Bazadan bot DB ID sini olish
     bot_db_id = await get_chatgpt_bot_db_id(callback.bot.token)
 
     if not bot_db_id:
@@ -791,16 +784,15 @@ async def show_balance_callback(callback: types.CallbackQuery):
         return
 
     try:
-        # Balansni olish (endi bot_db_id ishlatiladi)
         user_balance = await get_user_balance_db(user_id, bot_db_id)
 
         await callback.message.edit_text(
-            f"💰 <b>Ваш баланс:</b> {user_balance:.2f}₽\n\n"
+            f"💰 <b>Ваш баланс:</b> {user_balance:.0f} ⭐️\n\n"
             f"📊 <b>Тарифы:</b>\n"
-            f"• GPT-3.5 без контекста: 1₽\n"
-            f"• GPT-3.5 с контекстом: 2₽\n"
-            f"• GPT-4 без контекста: 3₽\n"
-            f"• GPT-4 с контекстом: 4₽\n\n"
+            f"• GPT-3.5 без контекста: 1 ⭐️\n"
+            f"• GPT-3.5 с контекстом: 2 ⭐️\n"
+            f"• GPT-4 без контекста: 3 ⭐️\n"
+            f"• GPT-4 с контекстом: 4 ⭐️\n\n"
             f"💡 Пополнить баланс можно через главный бот",
             reply_markup=bt.balance_menu(),
             parse_mode="HTML"
@@ -818,7 +810,7 @@ async def show_balance_callback(callback: types.CallbackQuery):
 @client_bot_router.callback_query(F.data == "top_up_balance")
 async def top_up_balance_callback(callback: types.CallbackQuery):
     await callback.message.edit_text(
-        "💳 <b>Выберите сумму для пополнения:</b>\n\n"
+        "💳 <b>Выберите количество Stars для пополнения:</b>\n\n"
         "⭐️ <i>Оплата через Telegram Stars</i>\n"
         "🔒 <i>Безопасно и мгновенно</i>",
         reply_markup=bt.top_up_options(),
@@ -829,13 +821,8 @@ async def top_up_balance_callback(callback: types.CallbackQuery):
 
 @client_bot_router.callback_query(F.data.startswith("topup_"))
 async def topup_redirect_callback(callback: types.CallbackQuery):
-    """Stars orqali to'lov - bazadan bot DB ID sini olish"""
+    """Stars orqali to'lov - faqat Stars ko'rsatish"""
     stars_amount = callback.data.replace("topup_", "").replace("_star", "").replace("_stars", "")
-    stars_to_rubles = {
-        "1": "5",
-        "5": "25"
-    }
-    rubles = stars_to_rubles.get(stars_amount, "5")
     main_bot_username = "konstruktor_test_my_bot"
 
     bot_db_id = await get_chatgpt_bot_db_id(callback.bot.token)
@@ -848,7 +835,7 @@ async def topup_redirect_callback(callback: types.CallbackQuery):
     logger.info(f"User {callback.from_user.id} redirecting to payment: {stars_amount} stars, bot_db_id={bot_db_id}")
 
     await callback.message.edit_text(
-        f"💎 <b>Пополнение на {stars_amount} Stars ({rubles}₽)</b>\n\n"
+        f"💎 <b>Пополнение на {stars_amount} Stars</b>\n\n"
         f"🔄 Переходите в основной бот для оплаты:\n"
         f"👇 Нажмите кнопку ниже",
         reply_markup=InlineKeyboardBuilder().button(
