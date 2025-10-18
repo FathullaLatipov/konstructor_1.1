@@ -80,7 +80,6 @@ def get_user_balance_db(user_id: int, bot_id: int):
             bot_id=bot_id,
             status='completed'
         ).aggregate(total_stars=Sum('amount_stars'))
-        print(total)
 
         balance = float(total['total_stars']) if total['total_stars'] else 0.0
 
@@ -92,7 +91,6 @@ def get_user_balance_db(user_id: int, bot_id: int):
         import traceback
         logger.error(traceback.format_exc())
         return 0.0
-
 async def start(message: Message, state: FSMContext, bot: Bot):
     try:
         bot_db = await shortcuts.get_bot(bot)
