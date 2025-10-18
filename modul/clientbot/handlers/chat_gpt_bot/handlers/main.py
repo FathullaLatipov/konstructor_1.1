@@ -348,11 +348,11 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
                     except Exception as e:
                         print(f"⚠️ Error sending notification to referrer {ref_id}: {e}")
 
-        result = await get_info_db(user_id)
+        result = await get_user_balance_db(user_id, bot.token)
         print(f"New user {user_id} created: {result}")
 
         await message.answer(
-            f'Привет {message.from_user.username}\nВаш баланс - {result[0][2]} ⭐️',
+            f'Привет {message.from_user.username}\nВаш баланс - {result} ⭐️',
             reply_markup=bt.first_buttons()
         )
 
