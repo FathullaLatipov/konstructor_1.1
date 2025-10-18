@@ -65,31 +65,33 @@ def save_user(u, bot: Bot, link=None, inviter=None):
 @sync_to_async
 def get_user_balance_db(user_id: int, bot_id: int):
     """
-    Foydalanuvchining balansini hisoblash
+    Foydalanuvchining balansini hisoblash (Stars da)
     user_id - foydalanuvchi Telegram ID si
-    bot_id - qaysi bot uchun balans
+    bot_id - qaysi bot uchun balans (database ID)
+    Returns: Balance in Stars (float)
     """
     try:
         from modul.models import PaymentTransaction
         from django.db.models import Sum
 
-        # Barcha to'lovlarni summalash
+        # Barcha to'lovlarni summalash - faqat Stars
         total = PaymentTransaction.objects.filter(
             user_id=user_id,
             bot_id=bot_id,
             status='completed'
-        ).aggregate(total=Sum('amount_stars'))
+        ).aggregate(total_stars=Sum('amount_stars'))
 
-        balance = float(total['total']) if total['total'] else 0.0
+        balance = float(total['total_stars']) if total['total_stars'] else 0.0
 
-        logger.info(f"Balance for user {user_id} in bot {bot_id}: {balance}₽")
+        logger.info(f"✅ Balance for user {user_id} in bot {bot_id}: {balance:.0f} ⭐️")
         return balance
 
     except Exception as e:
-        logger.error(f"Error getting balance: {e}")
+        logger.error(f"❌ Error getting balance for user {user_id} in bot {bot_id}: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return 0.0
+
 async def start(message: Message, state: FSMContext, bot: Bot):
     try:
         bot_db = await shortcuts.get_bot(bot)
