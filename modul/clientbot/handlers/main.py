@@ -80,6 +80,7 @@ def get_user_balance_db(user_id: int, bot_id: int):
             bot_id=bot_id,
             status='completed'
         ).aggregate(total_stars=Sum('amount_stars'))
+        print(total['total_stars'])
 
         balance = float(total['total_stars']) if total['total_stars'] else 0.0
 
