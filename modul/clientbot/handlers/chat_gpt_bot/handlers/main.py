@@ -303,7 +303,7 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
         result = await get_user_balance_db(user_id, bot_db_id)
         print(f"User {user_id} found in database: {result}")
         await message.answer(
-            f'Привет {message.from_user.username}\nВаш баланс - {result[0][2]} ⭐️',
+            f'Привет {message.from_user.username}\nВаш баланс - {result} ⭐️',
             reply_markup=bt.first_buttons()
         )
     except:
