@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import datetime
 
 from django.db.models import F
@@ -168,56 +169,73 @@ async def process_chatgpt_referral_bonus(user_id: int, referrer_id: int, bot_tok
 
 
 @sync_to_async
-def update_bc(tg_id: int, sign: str, amount: float, bot_id: int = None):
+def update_bc(tg_id: int, sign: str, amount: float, bot_id=None):
     """
-    Balansni yangilash
-    FAQAT minus (GPT so'rov) uchun PaymentTransaction ishlatadi
-    Plus (referal) eski sistemada qoladi
+    Balansni yangilash (Flexible - ID yoki Token)
+    tg_id - foydalanuvchi Telegram ID si
+    sign - '+' (qo'shish) yoki '-' (ayirish)
+    amount - miqdor (Stars da)
+    bot_id - Bot database ID yoki Bot token (ikkalasi ham ishlaydi)
+    Returns: True/False
     """
     try:
-        amount_value = float(amount)
+        from modul.models import PaymentTransaction, Bot
 
-        # MINUS - GPT so'rov, PaymentTransaction ga yozish
-        if sign == '-':
-            if bot_id is None:
-                logger.error("bot_id required for deduction")
+        if not bot_id:
+            logger.error("❌ bot_id is required")
+            return False
+
+        actual_bot_id = None
+
+        # Bot ID ni aniqlash - flexible
+        if isinstance(bot_id, int):
+            logger.info(f"💾 Using bot_id directly: {bot_id}")
+            actual_bot_id = bot_id
+        else:
+            logger.info(f"🔍 Looking up bot by token...")
+            bot = Bot.objects.filter(token=str(bot_id)).first()
+            if bot:
+                actual_bot_id = bot.id
+                logger.info(f"✅ Bot found: database ID={actual_bot_id}")
+            else:
+                logger.error(f"❌ Bot not found with token: {str(bot_id)[:15]}...")
                 return False
 
-            from modul.models import PaymentTransaction
+        # Transaction yaratish
+        if sign == '-':
+            # Chiqim - salbiy transaction
+            logger.info(f"💸 Deducting {amount} ⭐️ from user {tg_id}")
 
             PaymentTransaction.objects.create(
                 user_id=tg_id,
-                bot_id=bot_id,
-                amount_rubles=-amount_value,  # Minus
-                amount_stars=0,
-                payment_id=f"gpt_deduct_{tg_id}_{bot_id}_{int(datetime.now().timestamp())}",
+                bot_id=actual_bot_id,
+                amount_stars=int(-amount),
+                amount_rubles=int(-amount),  # Saqlab qolish uchun
+                payment_id=f"expense_{tg_id}_{int(amount)}_{int(time.time())}",
                 status='completed'
             )
-
-            logger.info(f"✅ Deducted {amount_value}₽ from user {tg_id} (GPT request)")
+            logger.info(f"✅ Deduction saved for user {tg_id}")
             return True
 
-        # PLUS - referal bonus, ESKI SISTEMA
-        else:
-            # Eski referal sistemangiz (o'zgarmaydi)
-            try:
-                from modul.models import ChatGPTBotUser
-                user = ChatGPTBotUser.objects.filter(user_id=tg_id).first()
+        elif sign == '+':
+            # Kirim - musbat transaction
+            logger.info(f"💰 Adding {amount} ⭐️ to user {tg_id}")
 
-                if user:
-                    user.balance += amount_value
-                    user.save()
-                    logger.info(f"✅ Added {amount_value}₽ to user {tg_id} (referral - old system)")
-                    return True
-                else:
-                    logger.error(f"User not found: {tg_id}")
-                    return False
-            except Exception as ref_error:
-                logger.error(f"Error updating referral balance: {ref_error}")
-                return False
+            PaymentTransaction.objects.create(
+                user_id=tg_id,
+                bot_id=actual_bot_id,
+                amount_stars=int(amount),
+                amount_rubles=int(amount),  # Saqlab qolish uchun
+                payment_id=f"income_{tg_id}_{int(amount)}_{int(time.time())}",
+                status='completed'
+            )
+            logger.info(f"✅ Income saved for user {tg_id}")
+            return True
+
+        return False
 
     except Exception as e:
-        logger.error(f"Error in update_bc: {e}")
+        logger.error(f"❌ Error updating balance: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return False

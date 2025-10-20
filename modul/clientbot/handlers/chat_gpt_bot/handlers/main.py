@@ -477,61 +477,102 @@ async def chat_3_callback(callback: types.CallbackQuery):
 # ==========================================
 
 @sync_to_async
-def get_chatgpt_bot_db_id(bot_token: str):
+def get_chatgpt_bot_db_id(bot_identifier):
     """
-    Bot tokenidan foydalanib bazadan ChatGPT botni topish va uning DB ID sini qaytarish
-    bot_token - Telegram bot token
+    Bot identifikatoridan database ID ni olish (flexible)
+    bot_identifier - Bot database ID yoki Bot token
     Returns: Database ID (int) yoki None
     """
     try:
-        from modul.models import Bot  # ✅ TO'G'RI model nomi
+        from modul.models import Bot
 
-        # Tokendan foydalanib botni topish
-        bot = Bot.objects.filter(token=bot_token).first()
+        # Agar int bo'lsa, avval database ID deb tekshiramiz
+        if isinstance(bot_identifier, int):
+            bot = Bot.objects.filter(id=bot_identifier).first()
+            if bot:
+                logger.info(f"✅ Bot found by ID: {bot.id}, username={bot.username}")
+                return bot.id
+
+        # Token deb tekshiramiz
+        bot = Bot.objects.filter(token=str(bot_identifier)).first()
 
         if bot:
-            logger.info(f"✅ ChatGPT bot found in DB: ID={bot.id}, username={bot.username}")
-            return bot.id  # Database ID
+            logger.info(f"✅ Bot found by token: ID={bot.id}, username={bot.username}")
+            return bot.id
         else:
-            logger.error(f"❌ ChatGPT bot not found with token: {bot_token[:10]}...")
+            logger.error(f"❌ Bot not found with identifier: {str(bot_identifier)[:15]}...")
             return None
 
     except Exception as e:
-        logger.error(f"❌ Error getting ChatGPT bot DB ID: {e}")
+        logger.error(f"❌ Error getting bot DB ID: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return None
 
 
 @sync_to_async
-def get_user_balance_db(user_id: int, bot_id: int):
+def get_user_balance_db(user_id: int, bot_identifier):
     """
-    Foydalanuvchining balansini hisoblash
+    Foydalanuvchining balansini hisoblash (Flexible - ID yoki Token)
     user_id - foydalanuvchi Telegram ID si
-    bot_id - qaysi bot uchun balans (database ID)
+    bot_identifier - Bot database ID yoki Bot token
+    Returns: Balance in Stars (float)
     """
     try:
-        from modul.models import PaymentTransaction
+        from modul.models import PaymentTransaction, Bot
         from django.db.models import Sum
 
-        # Barcha to'lovlarni summalash
-        total = PaymentTransaction.objects.filter(
-            user_id=user_id,
-            bot_id=bot_id,
-            status='completed'
-        ).aggregate(total=Sum('amount_rubles'))
+        actual_bot_id = None
 
-        balance = float(total['total']) if total['total'] else 0.0
+        # 1. Avval database ID deb tekshiramiz
+        if isinstance(bot_identifier, int):
+            logger.info(f"🔍 Trying as database ID: {bot_identifier}")
 
-        logger.info(f"Balance for user {user_id} in bot {bot_id}: {balance}₽")
-        return balance
+            bot_exists = Bot.objects.filter(id=bot_identifier).exists()
+
+            if bot_exists:
+                logger.info(f"✅ Bot exists with ID: {bot_identifier}")
+                total = PaymentTransaction.objects.filter(
+                    user_id=user_id,
+                    bot_id=bot_identifier,
+                    status='completed'
+                ).aggregate(total_stars=Sum('amount_stars'))
+
+                balance = float(total['total_stars']) if total['total_stars'] else 0.0
+                logger.info(
+                    f"✅ Balance by database ID: user={user_id}, bot_id={bot_identifier}, balance={balance:.0f} ⭐️")
+                return balance
+            else:
+                logger.info(f"⚠️ Bot not found by ID {bot_identifier}, trying as token...")
+
+        # 2. Token deb tekshiramiz
+        logger.info(f"🔍 Looking up bot by token: {str(bot_identifier)[:15]}...")
+
+        bot = Bot.objects.filter(token=str(bot_identifier)).first()
+
+        if bot:
+            logger.info(f"✅ Bot found by token: database ID={bot.id}")
+            actual_bot_id = bot.id
+
+            total = PaymentTransaction.objects.filter(
+                user_id=user_id,
+                bot_id=actual_bot_id,
+                status='completed'
+            ).aggregate(total_stars=Sum('amount_stars'))
+
+            balance = float(total['total_stars']) if total['total_stars'] else 0.0
+            logger.info(f"✅ Balance for user {user_id} in bot {actual_bot_id} (via token): {balance:.0f} ⭐️")
+            return balance
+        else:
+            logger.warning(f"⚠️ Bot not found by token: {str(bot_identifier)[:15]}...")
+            logger.error(f"❌ Bot not found with identifier: {bot_identifier}")
+            return 0.0
 
     except Exception as e:
-        logger.error(f"Error getting balance: {e}")
+        logger.error(f"❌ Error getting balance for user {user_id}: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return 0.0
-
 
 # ==========================================
 # GPT CHAT HANDLERS
