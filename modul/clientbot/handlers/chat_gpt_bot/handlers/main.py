@@ -303,7 +303,7 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
         result = await get_user_balance_db(user_id, bot_db_id)
         print(f"User {user_id} found in database: {result}")
         await message.answer(
-            f'Привет {message.from_user.username}\nВаш баланс - {result} ⭐️',
+            f'Привет {message.from_user.username}\nВаш баланс - {result:.0f} ⭐️',
             reply_markup=bt.first_buttons()
         )
     except:
@@ -342,7 +342,7 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
         print(f"New user {user_id} created: {result}")
 
         await message.answer(
-            f'Привет {message.from_user.username}\nВаш баланс - {result} ⭐️',
+            f'Привет {message.from_user.username}\nВаш баланс - {result:.0f} ⭐️',
             reply_markup=bt.first_buttons()
         )
 
@@ -429,7 +429,7 @@ async def check_channels_chatgpt_callback(callback: CallbackQuery, state: FSMCon
 
     result = await get_user_balance_db(user_id, bot.token)
     await callback.message.answer(
-        f'Привет {callback.from_user.username}\nВаш баланс - {result}',
+        f'Привет {callback.from_user.username}\nВаш баланс - {result:.0f}',
         reply_markup=bt.first_buttons()
     )
 
@@ -642,7 +642,7 @@ async def back_callback(callback: types.CallbackQuery, state: FSMContext, bot: B
         try:
             result = await get_user_balance_db(user_id, bot.token)
             print(result)
-            await callback.message.edit_text(f'Привет {callback.from_user.username}\nВаш баланс - {result}',
+            await callback.message.edit_text(f'Привет {callback.from_user.username}\nВаш баланс - {result:.0f}',
                                              reply_markup=bt.first_buttons())
             await state.clear()
         except Exception as e:
