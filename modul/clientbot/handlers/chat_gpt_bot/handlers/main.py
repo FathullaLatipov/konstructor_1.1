@@ -197,23 +197,7 @@ async def update_balance(message: types.Message, state: FSMContext):
         await message.answer('Error updating')
 
 
-@client_bot_router.message(CommandStart())
-async def tp_to_start(message: types.Message, bot: Bot, state: FSMContext):
-    from modul.clientbot.handlers.main import save_user
-    check_user = await default_checker(message.from_user.id)
-    print(check_user, "check_user")
-    if check_user is False:
-        new_link = await create_start_link(message.bot, str(message.from_user.id), encode=True)
-        link_for_db = new_link[new_link.index("=") + 1:]
-        await save_user(u=message.from_user, bot=bot, link=link_for_db)
-        await start_message(message)
-    elif check_user is True:
-        sent_message = await message.answer("Вы отправляетесь на старт")
-        await asyncio.sleep(1)
-        await message.delete()
-        await start_message(message)
-    else:
-        await message.answer('Технический перерыв')
+
 
 
 @client_bot_router.message(ChatGptFilter())
@@ -315,17 +299,21 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
 
     print(f"✅ User {user_id} subscribed to all channels or no channels found")
     try:
-        result = await get_info_db(user_id)
+        bot_db_id = await get_chatgpt_bot_db_id(message.bot.token)
+        result = await get_user_balance_db(user_id, bot_db_id)
         print(f"User {user_id} found in database: {result}")
         await message.answer(
-            f'Привет {message.from_user.username}\nВаш баланс - {result[0][2]} ⭐️',
+            f'Привет {message.from_user.username}\nВаш баланс - {result:.0f} ⭐️',
             reply_markup=bt.first_buttons()
         )
     except:
         print(f"User {user_id} not found, creating new user")
         new_link = await create_start_link(message.bot, str(message.from_user.id), encode=True)
         link_for_db = new_link[new_link.index("=") + 1:]
-        await save_user(u=message.from_user, bot=bot, link=link_for_db, referrer_id=referral)
+        try:
+            await save_user(u=message.from_user, bot=bot, link=link_for_db, referrer_id=referral)
+        except TypeError:
+            await save_user(u=message.from_user, bot=bot, link=link_for_db)
 
         if referral and referral.isdigit():
             ref_id = int(referral)
@@ -354,7 +342,7 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
         print(f"New user {user_id} created: {result}")
 
         await message.answer(
-            f'Привет {message.from_user.username}\nВаш баланс - {result} ⭐️',
+            f'Привет {message.from_user.username}\nВаш баланс - {result:.0f} ⭐️',
             reply_markup=bt.first_buttons()
         )
 
@@ -439,9 +427,9 @@ async def check_channels_chatgpt_callback(callback: CallbackQuery, state: FSMCon
     except:
         pass
 
-    result = await get_info_db(user_id)
+    result = await get_user_balance_db(user_id, bot.token)
     await callback.message.answer(
-        f'Привет {callback.from_user.username}\nВаш баланс - {result[0][2]}',
+        f'Привет {callback.from_user.username}\nВаш баланс - {result:.0f}',
         reply_markup=bt.first_buttons()
     )
 
@@ -493,61 +481,102 @@ async def chat_3_callback(callback: types.CallbackQuery):
 # ==========================================
 
 @sync_to_async
-def get_chatgpt_bot_db_id(bot_token: str):
+def get_chatgpt_bot_db_id(bot_identifier):
     """
-    Bot tokenidan foydalanib bazadan ChatGPT botni topish va uning DB ID sini qaytarish
-    bot_token - Telegram bot token
+    Bot identifikatoridan database ID ni olish (flexible)
+    bot_identifier - Bot database ID yoki Bot token
     Returns: Database ID (int) yoki None
     """
     try:
-        from modul.models import Bot  # ✅ TO'G'RI model nomi
+        from modul.models import Bot
 
-        # Tokendan foydalanib botni topish
-        bot = Bot.objects.filter(token=bot_token).first()
+        # Agar int bo'lsa, avval database ID deb tekshiramiz
+        if isinstance(bot_identifier, int):
+            bot = Bot.objects.filter(id=bot_identifier).first()
+            if bot:
+                logger.info(f"✅ Bot found by ID: {bot.id}, username={bot.username}")
+                return bot.id
+
+        # Token deb tekshiramiz
+        bot = Bot.objects.filter(token=str(bot_identifier)).first()
 
         if bot:
-            logger.info(f"✅ ChatGPT bot found in DB: ID={bot.id}, username={bot.username}")
-            return bot.id  # Database ID
+            logger.info(f"✅ Bot found by token: ID={bot.id}, username={bot.username}")
+            return bot.id
         else:
-            logger.error(f"❌ ChatGPT bot not found with token: {bot_token[:10]}...")
+            logger.error(f"❌ Bot not found with identifier: {str(bot_identifier)[:15]}...")
             return None
 
     except Exception as e:
-        logger.error(f"❌ Error getting ChatGPT bot DB ID: {e}")
+        logger.error(f"❌ Error getting bot DB ID: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return None
 
 
 @sync_to_async
-def get_user_balance_db(user_id: int, bot_id: int):
+def get_user_balance_db(user_id: int, bot_identifier):
     """
-    Foydalanuvchining balansini hisoblash
+    Foydalanuvchining balansini hisoblash (Flexible - ID yoki Token)
     user_id - foydalanuvchi Telegram ID si
-    bot_id - qaysi bot uchun balans (database ID)
+    bot_identifier - Bot database ID yoki Bot token
+    Returns: Balance in Stars (float)
     """
     try:
-        from modul.models import PaymentTransaction
+        from modul.models import PaymentTransaction, Bot
         from django.db.models import Sum
 
-        # Barcha to'lovlarni summalash
-        total = PaymentTransaction.objects.filter(
-            user_id=user_id,
-            bot_id=bot_id,
-            status='completed'
-        ).aggregate(total=Sum('amount_rubles'))
+        actual_bot_id = None
 
-        balance = float(total['total']) if total['total'] else 0.0
+        # 1. Avval database ID deb tekshiramiz
+        if isinstance(bot_identifier, int):
+            logger.info(f"🔍 Trying as database ID: {bot_identifier}")
 
-        logger.info(f"Balance for user {user_id} in bot {bot_id}: {balance}₽")
-        return balance
+            bot_exists = Bot.objects.filter(id=bot_identifier).exists()
+
+            if bot_exists:
+                logger.info(f"✅ Bot exists with ID: {bot_identifier}")
+                total = PaymentTransaction.objects.filter(
+                    user_id=user_id,
+                    bot_id=bot_identifier,
+                    status='completed'
+                ).aggregate(total_stars=Sum('amount_stars'))
+
+                balance = float(total['total_stars']) if total['total_stars'] else 0.0
+                logger.info(
+                    f"✅ Balance by database ID: user={user_id}, bot_id={bot_identifier}, balance={balance:.0f} ⭐️")
+                return balance
+            else:
+                logger.info(f"⚠️ Bot not found by ID {bot_identifier}, trying as token...")
+
+        # 2. Token deb tekshiramiz
+        logger.info(f"🔍 Looking up bot by token: {str(bot_identifier)[:15]}...")
+
+        bot = Bot.objects.filter(token=str(bot_identifier)).first()
+
+        if bot:
+            logger.info(f"✅ Bot found by token: database ID={bot.id}")
+            actual_bot_id = bot.id
+
+            total = PaymentTransaction.objects.filter(
+                user_id=user_id,
+                bot_id=actual_bot_id,
+                status='completed'
+            ).aggregate(total_stars=Sum('amount_stars'))
+
+            balance = float(total['total_stars']) if total['total_stars'] else 0.0
+            logger.info(f"✅ Balance for user {user_id} in bot {actual_bot_id} (via token): {balance:.0f} ⭐️")
+            return balance
+        else:
+            logger.warning(f"⚠️ Bot not found by token: {str(bot_identifier)[:15]}...")
+            logger.error(f"❌ Bot not found with identifier: {bot_identifier}")
+            return 0.0
 
     except Exception as e:
-        logger.error(f"Error getting balance: {e}")
+        logger.error(f"❌ Error getting balance for user {user_id}: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return 0.0
-
 
 # ==========================================
 # GPT CHAT HANDLERS
@@ -582,19 +611,23 @@ async def chat_options_callback(callback: types.CallbackQuery, state: FSMContext
         if success:
             if callback.data in ['not', 'again_gpt3']:
                 await callback.message.answer('Пришлите свой запрос:')
-                await state.set_state('waiting_for_gpt3')
+                await state.set_state(AiState.gpt3)
+                await state.update_data(context=False)  # ✅ Context ni state ga saqlaymiz
 
             elif callback.data == 'with':
                 await callback.message.answer('Пришлите свой запрос:\n/start для выхода')
-                await state.set_state('waiting_for_gpt3_context')
+                await state.set_state(AiState.gpt3)
+                await state.update_data(context=True)  # ✅ Context ni state ga saqlaymiz
 
             elif callback.data in ['not4', 'again_gpt4']:
                 await callback.message.answer('Пришлите свой запрос:')
-                await state.set_state('waiting_for_gpt4')
+                await state.set_state(AiState.gpt4)
+                await state.update_data(context=False)  # ✅ Context ni state ga saqlaymiz
 
             elif callback.data == 'with4':
                 await callback.message.answer('Пришлите свой запрос:\n/start для выхода')
-                await state.set_state('waiting_for_gpt4_context')
+                await state.set_state(AiState.gpt4)
+                await state.update_data(context=True)  # ✅ Context ni state ga saqlaymiz
         else:
             await callback.message.answer('Ошибка списания. Попробуйте /start')
     else:
@@ -608,11 +641,12 @@ async def chat_options_callback(callback: types.CallbackQuery, state: FSMContext
 
 @client_bot_router.callback_query(F.data.in_({"back", "back_on_menu"}))
 async def back_callback(callback: types.CallbackQuery, state: FSMContext, bot: Bot):
+    user_id = callback.from_user.id
     if callback.data == 'back':
         try:
-            result = await get_info_db(callback.from_user.id)
+            result = await get_user_balance_db(user_id, bot.token)
             print(result)
-            await callback.message.edit_text(f'Привет {callback.from_user.username}\nВаш баланс - {result[0][2]}',
+            await callback.message.edit_text(f'Привет {callback.from_user.username}\nВаш баланс - {result:.0f}',
                                              reply_markup=bt.first_buttons())
             await state.clear()
         except Exception as e:
@@ -696,45 +730,26 @@ async def how_to_pay_callback(callback: types.CallbackQuery):
     )
 
 
-@client_bot_router.message(lambda message: message.text not in ['/start', '/reset'], ChatGptFilter())
-async def handle_text_input(message: Message, state: FSMContext):
-    current_state = await state.get_state()
-    print(f"Current state: {current_state}")
-    if current_state == 'waiting_for_gpt3':
-        await gpt3(message, context=False)
-    elif current_state == 'waiting_for_gpt3_context':
-        await gpt3(message, context=True)
-    elif current_state == 'waiting_for_gpt4':
-        await gpt4(message, context=False)
-    elif current_state == 'waiting_for_gpt4_context':
-        await gpt4(message, context=True)
-    await state.clear()
+# @client_bot_router.message(lambda message: message.text not in ['/start', '/reset'], ChatGptFilter())
+# async def handle_text_input(message: Message, state: FSMContext):
+#     current_state = await state.get_state()
+#     print(f"Current state: {current_state}")
+#     if current_state == 'waiting_for_gpt3':
+#         await gpt3(message, context=False)
+#     elif current_state == 'waiting_for_gpt3_context':
+#         await gpt3(message, context=True)
+#     elif current_state == 'waiting_for_gpt4':
+#         await gpt4(message, context=False)
+#     elif current_state == 'waiting_for_gpt4_context':
+#         await gpt4(message, context=True)
+#     await state.clear()
 
 
 @client_bot_router.message(AiState.gpt3, ChatGptFilter())
 async def gpt3(message: Message, state: FSMContext):
-    context_data = await state.get_data()
-    context = context_data.get("context", False)
-    await message.bot.send_chat_action(message.chat.id, 'typing')
+    """GPT-3.5 handler"""
 
-    if not context:
-        if message.text:
-            gpt_answer = robot.chat_gpt(user_id=message.from_user.id, message=message.text)
-            await message.answer(gpt_answer, parse_mode='Markdown', reply_markup=bt.again_gpt3())
-        else:
-            await message.answer('Я могу обрабатывать только текст ! /start')
-    else:
-        if message.text in ['/start', '/restart', '/reset']:
-            await tp_to_start(message)
-        elif message.text:
-            gpt_answer = robot.chat_gpt(user_id=message.from_user.id, message=message.text, context=True)
-            await message.answer(gpt_answer, parse_mode='Markdown')
-        else:
-            await message.answer('Я могу обрабатывать только текст ! /start')
-
-
-@client_bot_router.message(AiState.gpt4, ChatGptFilter())
-async def gpt4(message: Message, state: FSMContext):
+    # State dan context ni olish
     context_data = await state.get_data()
     context = context_data.get("context", False)
 
@@ -742,34 +757,102 @@ async def gpt4(message: Message, state: FSMContext):
 
     user_id = message.from_user.id
 
-    if not context:
-        print(
-            f'GPT4 NO_CONTEXT user_id -- >{user_id}, first_name -- > {message.from_user.first_name}, user_name -- > @{message.from_user.username}')
+    # Context mode da reset komandalarini tekshirish
+    if context and message.text in ['/start', '/restart', '/reset']:
+        await state.clear()
+        await start_message(message, state, message.bot)
+        return
 
-        if message.text:
-            gpt_answer = robot.chat_gpt(user_id=user_id, message=message.text, gpt="gpt-4-1106-preview")
-            if gpt_answer:
-                await message.answer(gpt_answer, parse_mode='Markdown', reply_markup=bt.again_gpt4())
+    # Faqat text qabul qilamiz
+    if not message.text:
+        await message.answer('Я могу обрабатывать только текст ! /start')
+        return
+
+    try:
+        logger.info(f'GPT3 {"CONTEXT" if context else "NO_CONTEXT"} user_id={user_id}')
+
+        # GPT ga so'rov
+        gpt_answer = robot.chat_gpt(
+            user_id=user_id,
+            message=message.text,
+            gpt='gpt-3.5-turbo',
+            context=context
+        )
+
+        if gpt_answer:
+            if not context:
+                # Context bo'lmasa - again button va state clear
+                await message.answer(gpt_answer, parse_mode='Markdown', reply_markup=bt.again_gpt3())
+                await state.clear()
             else:
-                await message.answer('GPT4 Недоступен', parse_mode='Markdown', reply_markup=bt.again_gpt4())
-        else:
-            await message.answer('Я могу обрабатывать только текст ! /start')
-    else:
-        print(
-            f'GPT4 CONTEXT user_id -- >{user_id}, first_name -- > {message.from_user.first_name}, user_name -- > @{message.from_user.username}')
-
-        if message.text in ['/start', '/restart', '/reset']:
-            await tp_to_start(message)
-        elif message.text:
-            gpt_answer = robot.chat_gpt(user_id=user_id, message=message.text, context=True, gpt="gpt-4-1106-preview")
-            if gpt_answer:
+                # Context bo'lsa - button yo'q, state saqlanadi
                 await message.answer(gpt_answer, parse_mode='Markdown')
-                await state.set_state(AiState.gpt4)
-            else:
-                await message.answer('GPT4 Недоступен', parse_mode='Markdown')
+                # State saqlanadi - keyingi xabar ham shu handler ga tushadi
         else:
-            await message.answer('Я могу обрабатывать только текст ! /start')
+            await message.answer('❌ Произошла ошибка при обработке запроса')
+            if not context:
+                await state.clear()
 
+    except Exception as e:
+        logger.error(f'GPT3 Error: {e}', exc_info=True)
+        await message.answer('❌ Произошла ошибка при обработке запроса')
+        if not context:
+            await state.clear()
+
+
+@client_bot_router.message(AiState.gpt4, ChatGptFilter())
+async def gpt4(message: Message, state: FSMContext):
+    """GPT-4 handler"""
+
+    # State dan context ni olish
+    context_data = await state.get_data()
+    context = context_data.get("context", False)
+
+    await message.bot.send_chat_action(message.chat.id, 'typing')
+
+    user_id = message.from_user.id
+
+    # Context mode da reset komandalarini tekshirish
+    if context and message.text in ['/start', '/restart', '/reset']:
+        await state.clear()
+        await start_message(message, state, message.bot)
+        return
+
+    # Faqat text qabul qilamiz
+    if not message.text:
+        await message.answer('Я могу обрабатывать только текст ! /start')
+        return
+
+    try:
+        logger.info(f'GPT4 {"CONTEXT" if context else "NO_CONTEXT"} user_id={user_id}')
+
+        # GPT ga so'rov
+        gpt_answer = robot.chat_gpt(
+            user_id=user_id,
+            message=message.text,
+            gpt="gpt-4o",  # yoki "gpt-4-1106-preview"
+            context=context
+        )
+
+        if gpt_answer:
+            if not context:
+                # Context bo'lmasa - again button va state clear
+                await message.answer(gpt_answer, parse_mode='Markdown', reply_markup=bt.again_gpt4())
+                await state.clear()
+            else:
+                # Context bo'lsa - button yo'q, state saqlanadi
+                await message.answer(gpt_answer, parse_mode='Markdown')
+                # State saqlanadi - keyingi xabar ham shu handler ga tushadi
+        else:
+            await message.answer('GPT4 Недоступен', parse_mode='Markdown')
+            if not context:
+                await state.clear()
+
+    except Exception as e:
+        logger.error(f'GPT4 Error: {e}', exc_info=True)
+        await message.answer('❌ Произошла ошибка при обработке запроса')
+        if not context:
+            await state.clear()
 
 # ==========================================
 # BALANCE & PAYMENT HANDLERS
