@@ -218,9 +218,13 @@ async def update_balance(message: types.Message, state: FSMContext):
 
 @client_bot_router.message(ChatGptFilter())
 async def start_message(message: types.Message, state: FSMContext, bot: Bot):
+    """ChatGPT bot start message handler - Stars only"""
     from modul.clientbot.handlers.main import save_user
+    from modul.clientbot.handlers.chat_gpt_bot.utils import get_chatgpt_bot_db_id, get_user_balance_db
+
     user_id = message.from_user.id
 
+    # Admin command
     if message.text == "/adminpayamount":
         await message.answer('Пришли токен')
         await state.set_state(AiAdminState.check_token_and_update)
@@ -229,6 +233,15 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
 
     print(await state.get_state())
 
+    # ✅ Bot database ID ni olish (birinchi navbatda)
+    bot_db_id = await get_chatgpt_bot_db_id(bot.token)
+
+    if not bot_db_id:
+        await message.answer("❌ Ошибка конфигурации бота. Обратитесь к администратору.")
+        logger.error(f"❌ Bot not found in DB for token: {bot.token[:10]}...")
+        return
+
+    # Referral linkni tekshirish
     referral = None
     if message.text and message.text.startswith('/start '):
         args = message.text[7:]
@@ -237,6 +250,7 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
             await state.update_data(referral=referral)
             print(f"Extracted referral: {referral}")
 
+    # Kanallarni tekshirish
     channels = await get_channels_with_type_for_check()
     print(f"📡 Found channels: {channels}")
 
@@ -284,10 +298,12 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
                     logger.warning(f"System channel {channel_id} error (ignoring): {e}")
                 continue
 
+        # Invalid kanallarni o'chirish
         if invalid_channels_to_remove:
             for channel_id in invalid_channels_to_remove:
                 await remove_sponsor_channel(channel_id)
 
+        # Agar obuna bo'lmagan kanallar bo'lsa
         if not_subscribed_channels:
             print(f"🚫 User {user_id} not subscribed to all channels")
 
@@ -313,20 +329,30 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
             print(f"📝 State saved for user {user_id}: referral data will be processed after channel check")
             return
 
+    # ✅ Barcha kanallarga obuna bo'lgan
     print(f"✅ User {user_id} subscribed to all channels or no channels found")
+
     try:
+        # Mavjud foydalanuvchi
         result = await get_info_db(user_id)
         print(f"User {user_id} found in database: {result}")
+
+        # ✅ Balansni to'g'ri olish - bot_db_id bilan
+        user_balance = await get_user_balance_db(user_id, bot_db_id)
+
         await message.answer(
-            f'Привет {message.from_user.username}\nВаш баланс - {result[0][2]} ⭐️',
+            f'Привет {message.from_user.username}\nВаш баланс - {user_balance:.0f} ⭐️',
             reply_markup=bt.first_buttons()
         )
+
     except:
+        # Yangi foydalanuvchi yaratish
         print(f"User {user_id} not found, creating new user")
         new_link = await create_start_link(message.bot, str(message.from_user.id), encode=True)
         link_for_db = new_link[new_link.index("=") + 1:]
         await save_user(u=message.from_user, bot=bot, link=link_for_db, referrer_id=referral)
 
+        # Referral bonus
         if referral and referral.isdigit():
             ref_id = int(referral)
             if ref_id != user_id:
@@ -350,11 +376,12 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
                     except Exception as e:
                         print(f"⚠️ Error sending notification to referrer {ref_id}: {e}")
 
-        result = await get_user_balance_db(user_id, bot.token)
-        print(f"New user {user_id} created: {result}")
+        # ✅ Yangi foydalanuvchi uchun ham to'g'ri balans - bot_db_id bilan
+        user_balance = await get_user_balance_db(user_id, bot_db_id)
+        print(f"New user {user_id} created, balance: {user_balance:.0f} ⭐️")
 
         await message.answer(
-            f'Привет {message.from_user.username}\nВаш баланс - {result} ⭐️',
+            f'Привет {message.from_user.username}\nВаш баланс - {user_balance:.0f} ⭐️',
             reply_markup=bt.first_buttons()
         )
 
