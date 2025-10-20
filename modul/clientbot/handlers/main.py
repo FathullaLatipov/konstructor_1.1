@@ -173,7 +173,7 @@ async def start(message: Message, state: FSMContext, bot: Bot):
                 builder.adjust(2, 1, 1, 1, 1)
 
                 result = await get_info_db(uid)
-                text = f'Привет {message.from_user.username}\nВаш баланс - {user_balance:.0f} ⭐️'
+                text = f'Привет {message.from_user.username}\nВаш баланс - {user_balance} ⭐️'
                 logger.debug(text,'main 177')
                 kwargs['reply_markup'] = builder.as_markup()
         else:

@@ -642,7 +642,7 @@ async def back_callback(callback: types.CallbackQuery, state: FSMContext, bot: B
         try:
             result = await get_user_balance_db(user_id, bot.token)
             print(result)
-            await callback.message.edit_text(f'Привет {callback.from_user.username}\nВаш баланс - {result[0][2]}',
+            await callback.message.edit_text(f'Привет {callback.from_user.username}\nВаш баланс - {result}',
                                              reply_markup=bt.first_buttons())
             await state.clear()
         except Exception as e:
