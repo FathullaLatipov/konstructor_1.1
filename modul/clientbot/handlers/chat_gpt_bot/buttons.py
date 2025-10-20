@@ -87,14 +87,12 @@ def choice_5():
 
 def again_gpt3():
     builder = InlineKeyboardBuilder()
-    builder.button(text='📧Еще', callback_data='again_gpt3')
     builder.button(text='📝Меню', callback_data='back')
     return builder.as_markup()
 
 
 def again_gpt4():
     builder = InlineKeyboardBuilder()
-    builder.button(text='📧Еще', callback_data='again_gpt4')
     builder.button(text='📝Меню', callback_data='back')
     return builder.as_markup()
 
