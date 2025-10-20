@@ -429,7 +429,7 @@ async def check_channels_chatgpt_callback(callback: CallbackQuery, state: FSMCon
 
     result = await get_user_balance_db(user_id, bot.token)
     await callback.message.answer(
-        f'Привет {callback.from_user.username}\nВаш баланс - {result[0][2]}',
+        f'Привет {callback.from_user.username}\nВаш баланс - {result}',
         reply_markup=bt.first_buttons()
     )
 
