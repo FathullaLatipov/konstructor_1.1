@@ -197,7 +197,23 @@ async def update_balance(message: types.Message, state: FSMContext):
         await message.answer('Error updating')
 
 
-
+@client_bot_router.message(CommandStart())
+async def tp_to_start(message: types.Message, bot: Bot, state: FSMContext):
+    from modul.clientbot.handlers.main import save_user
+    check_user = await default_checker(message.from_user.id)
+    print(check_user, "check_user")
+    if check_user is False:
+        new_link = await create_start_link(message.bot, str(message.from_user.id), encode=True)
+        link_for_db = new_link[new_link.index("=") + 1:]
+        await save_user(u=message.from_user, bot=bot, link=link_for_db)
+        await start_message(message)
+    elif check_user is True:
+        sent_message = await message.answer("Вы отправляетесь на старт")
+        await asyncio.sleep(1)
+        await message.delete()
+        await start_message(message)
+    else:
+        await message.answer('Технический перерыв')
 
 
 @client_bot_router.message(ChatGptFilter())
@@ -299,21 +315,17 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
 
     print(f"✅ User {user_id} subscribed to all channels or no channels found")
     try:
-        bot_db_id = await get_chatgpt_bot_db_id(message.bot.token)
-        result = await get_user_balance_db(user_id, bot_db_id)
+        result = await get_info_db(user_id)
         print(f"User {user_id} found in database: {result}")
         await message.answer(
-            f'Привет {message.from_user.username}\nВаш баланс - {result:.0f} ⭐️',
+            f'Привет {message.from_user.username}\nВаш баланс - {result[0][2]} ⭐️',
             reply_markup=bt.first_buttons()
         )
     except:
         print(f"User {user_id} not found, creating new user")
         new_link = await create_start_link(message.bot, str(message.from_user.id), encode=True)
         link_for_db = new_link[new_link.index("=") + 1:]
-        try:
-            await save_user(u=message.from_user, bot=bot, link=link_for_db, referrer_id=referral)
-        except TypeError:
-            await save_user(u=message.from_user, bot=bot, link=link_for_db)
+        await save_user(u=message.from_user, bot=bot, link=link_for_db, referrer_id=referral)
 
         if referral and referral.isdigit():
             ref_id = int(referral)
@@ -342,7 +354,7 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
         print(f"New user {user_id} created: {result}")
 
         await message.answer(
-            f'Привет {message.from_user.username}\nВаш баланс - {result:.0f} ⭐️',
+            f'Привет {message.from_user.username}\nВаш баланс - {result} ⭐️',
             reply_markup=bt.first_buttons()
         )
 
@@ -427,9 +439,9 @@ async def check_channels_chatgpt_callback(callback: CallbackQuery, state: FSMCon
     except:
         pass
 
-    result = await get_user_balance_db(user_id, bot.token)
+    result = await get_info_db(user_id)
     await callback.message.answer(
-        f'Привет {callback.from_user.username}\nВаш баланс - {result:.0f}',
+        f'Привет {callback.from_user.username}\nВаш баланс - {result[0][2]}',
         reply_markup=bt.first_buttons()
     )
 
@@ -481,102 +493,61 @@ async def chat_3_callback(callback: types.CallbackQuery):
 # ==========================================
 
 @sync_to_async
-def get_chatgpt_bot_db_id(bot_identifier):
+def get_chatgpt_bot_db_id(bot_token: str):
     """
-    Bot identifikatoridan database ID ni olish (flexible)
-    bot_identifier - Bot database ID yoki Bot token
+    Bot tokenidan foydalanib bazadan ChatGPT botni topish va uning DB ID sini qaytarish
+    bot_token - Telegram bot token
     Returns: Database ID (int) yoki None
     """
     try:
-        from modul.models import Bot
+        from modul.models import Bot  # ✅ TO'G'RI model nomi
 
-        # Agar int bo'lsa, avval database ID deb tekshiramiz
-        if isinstance(bot_identifier, int):
-            bot = Bot.objects.filter(id=bot_identifier).first()
-            if bot:
-                logger.info(f"✅ Bot found by ID: {bot.id}, username={bot.username}")
-                return bot.id
-
-        # Token deb tekshiramiz
-        bot = Bot.objects.filter(token=str(bot_identifier)).first()
+        # Tokendan foydalanib botni topish
+        bot = Bot.objects.filter(token=bot_token).first()
 
         if bot:
-            logger.info(f"✅ Bot found by token: ID={bot.id}, username={bot.username}")
-            return bot.id
+            logger.info(f"✅ ChatGPT bot found in DB: ID={bot.id}, username={bot.username}")
+            return bot.id  # Database ID
         else:
-            logger.error(f"❌ Bot not found with identifier: {str(bot_identifier)[:15]}...")
+            logger.error(f"❌ ChatGPT bot not found with token: {bot_token[:10]}...")
             return None
 
     except Exception as e:
-        logger.error(f"❌ Error getting bot DB ID: {e}")
+        logger.error(f"❌ Error getting ChatGPT bot DB ID: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return None
 
 
 @sync_to_async
-def get_user_balance_db(user_id: int, bot_identifier):
+def get_user_balance_db(user_id: int, bot_id: int):
     """
-    Foydalanuvchining balansini hisoblash (Flexible - ID yoki Token)
+    Foydalanuvchining balansini hisoblash
     user_id - foydalanuvchi Telegram ID si
-    bot_identifier - Bot database ID yoki Bot token
-    Returns: Balance in Stars (float)
+    bot_id - qaysi bot uchun balans (database ID)
     """
     try:
-        from modul.models import PaymentTransaction, Bot
+        from modul.models import PaymentTransaction
         from django.db.models import Sum
 
-        actual_bot_id = None
+        # Barcha to'lovlarni summalash
+        total = PaymentTransaction.objects.filter(
+            user_id=user_id,
+            bot_id=bot_id,
+            status='completed'
+        ).aggregate(total=Sum('amount_rubles'))
 
-        # 1. Avval database ID deb tekshiramiz
-        if isinstance(bot_identifier, int):
-            logger.info(f"🔍 Trying as database ID: {bot_identifier}")
+        balance = float(total['total']) if total['total'] else 0.0
 
-            bot_exists = Bot.objects.filter(id=bot_identifier).exists()
-
-            if bot_exists:
-                logger.info(f"✅ Bot exists with ID: {bot_identifier}")
-                total = PaymentTransaction.objects.filter(
-                    user_id=user_id,
-                    bot_id=bot_identifier,
-                    status='completed'
-                ).aggregate(total_stars=Sum('amount_stars'))
-
-                balance = float(total['total_stars']) if total['total_stars'] else 0.0
-                logger.info(
-                    f"✅ Balance by database ID: user={user_id}, bot_id={bot_identifier}, balance={balance:.0f} ⭐️")
-                return balance
-            else:
-                logger.info(f"⚠️ Bot not found by ID {bot_identifier}, trying as token...")
-
-        # 2. Token deb tekshiramiz
-        logger.info(f"🔍 Looking up bot by token: {str(bot_identifier)[:15]}...")
-
-        bot = Bot.objects.filter(token=str(bot_identifier)).first()
-
-        if bot:
-            logger.info(f"✅ Bot found by token: database ID={bot.id}")
-            actual_bot_id = bot.id
-
-            total = PaymentTransaction.objects.filter(
-                user_id=user_id,
-                bot_id=actual_bot_id,
-                status='completed'
-            ).aggregate(total_stars=Sum('amount_stars'))
-
-            balance = float(total['total_stars']) if total['total_stars'] else 0.0
-            logger.info(f"✅ Balance for user {user_id} in bot {actual_bot_id} (via token): {balance:.0f} ⭐️")
-            return balance
-        else:
-            logger.warning(f"⚠️ Bot not found by token: {str(bot_identifier)[:15]}...")
-            logger.error(f"❌ Bot not found with identifier: {bot_identifier}")
-            return 0.0
+        logger.info(f"Balance for user {user_id} in bot {bot_id}: {balance}₽")
+        return balance
 
     except Exception as e:
-        logger.error(f"❌ Error getting balance for user {user_id}: {e}")
+        logger.error(f"Error getting balance: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return 0.0
+
 
 # ==========================================
 # GPT CHAT HANDLERS
@@ -637,12 +608,11 @@ async def chat_options_callback(callback: types.CallbackQuery, state: FSMContext
 
 @client_bot_router.callback_query(F.data.in_({"back", "back_on_menu"}))
 async def back_callback(callback: types.CallbackQuery, state: FSMContext, bot: Bot):
-    user_id = callback.from_user.id
     if callback.data == 'back':
         try:
-            result = await get_user_balance_db(user_id, bot.token)
+            result = await get_info_db(callback.from_user.id)
             print(result)
-            await callback.message.edit_text(f'Привет {callback.from_user.username}\nВаш баланс - {result:.0f}',
+            await callback.message.edit_text(f'Привет {callback.from_user.username}\nВаш баланс - {result[0][2]}',
                                              reply_markup=bt.first_buttons())
             await state.clear()
         except Exception as e:
@@ -755,7 +725,7 @@ async def gpt3(message: Message, state: FSMContext):
             await message.answer('Я могу обрабатывать только текст ! /start')
     else:
         if message.text in ['/start', '/restart', '/reset']:
-            await start_message(message)
+            await tp_to_start(message)
         elif message.text:
             gpt_answer = robot.chat_gpt(user_id=message.from_user.id, message=message.text, context=True)
             await message.answer(gpt_answer, parse_mode='Markdown')
@@ -789,7 +759,7 @@ async def gpt4(message: Message, state: FSMContext):
             f'GPT4 CONTEXT user_id -- >{user_id}, first_name -- > {message.from_user.first_name}, user_name -- > @{message.from_user.username}')
 
         if message.text in ['/start', '/restart', '/reset']:
-            await start_message(message)
+            await tp_to_start(message)
         elif message.text:
             gpt_answer = robot.chat_gpt(user_id=user_id, message=message.text, context=True, gpt="gpt-4-1106-preview")
             if gpt_answer:
