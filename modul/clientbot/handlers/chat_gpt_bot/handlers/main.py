@@ -200,7 +200,10 @@ async def update_balance(message: types.Message, state: FSMContext):
 
 
 
-@client_bot_router.message(ChatGptFilter())
+@client_bot_router.message(
+    StateFilter(None),
+    ChatGptFilter()
+)
 async def start_message(message: types.Message, state: FSMContext, bot: Bot):
     from modul.clientbot.handlers.main import save_user
     user_id = message.from_user.id
