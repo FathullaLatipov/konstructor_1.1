@@ -10,6 +10,8 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from modul import models
 from modul.clientbot import shortcuts, strings
 from modul.clientbot.data.callback_datas import MainMenuCallbackData
+
+from modul.clientbot.handlers.chat_gpt_bot.handlers.main import get_chatgpt_bot_db_id
 from modul.clientbot.handlers.chat_gpt_bot.shortcuts import get_info_db
 from modul.clientbot.handlers.kino_bot.handlers.bot import start_kino_bot
 from modul.clientbot.handlers.refs.handlers.bot import start_ref
@@ -154,16 +156,25 @@ async def start(message: Message, state: FSMContext, bot: Bot):
         elif shortcuts.have_one_module(bot_db, "chatgpt"):
             builder = InlineKeyboardBuilder()
             user_id = message.from_user.id
-            bot_id = message.bot.id
-            user_balance = await get_user_balance_db(user_id, bot.token)
-            builder.button(text='☁ Чат с GPT-4', callback_data='chat_4')
-            builder.button(text='☁ Чат с GPT-3.5', callback_data='chat_3')
-            builder.button(text='💰 Баланс', callback_data='show_balance')
-            builder.button(text='💸Заработать', callback_data='ref')
-            builder.adjust(2, 1, 1, 1, 1)
-            result = await get_info_db(uid)
-            text = f'Привет {message.from_user.username}\nВаш баланс - {user_balance} ⭐'
-            kwargs['reply_markup'] = builder.as_markup()
+
+            bot_db_id = await get_chatgpt_bot_db_id(bot.token)
+
+            if not bot_db_id:
+                logger.error(f"❌ Bot not found for token: {bot.token[:10]}...")
+                text = "❌ Ошибка конфигурации бота. Обратитесь к администратору."
+            else:
+                # ✅ DATABASE ID BILAN BALANSNI OLISH
+                user_balance = await get_user_balance_db(user_id, bot_db_id)
+
+                builder.button(text='☁ Чат с GPT-4', callback_data='chat_4')
+                builder.button(text='☁ Чат с GPT-3.5', callback_data='chat_3')
+                builder.button(text='💰 Баланс', callback_data='show_balance')
+                builder.button(text='💸Заработать', callback_data='ref')
+                builder.adjust(2, 1, 1, 1, 1)
+
+                result = await get_info_db(uid)
+                text = f'Привет {message.from_user.username}\nВаш баланс - {user_balance:.0f} ⭐️'
+                kwargs['reply_markup'] = builder.as_markup()
         else:
             kwargs['reply_markup'] = await reply_kb.main_menu(uid, bot)
 
