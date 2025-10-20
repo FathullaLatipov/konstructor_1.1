@@ -710,18 +710,24 @@ async def send_admin_notification(bot, user_id: int, bot_db_id: int, stars_amoun
     """Admin ga xabar - faqat Stars"""
     try:
         user_info = await get_user_info(user_id, bot_db_id)
+
         if user_info:
             username = user_info.get('username', 'Не указан')
             first_name = user_info.get('first_name', 'Не указан')
         else:
             username = 'Не найден'
             first_name = 'Не найден'
+
         balance = await get_user_balance(user_id, bot_db_id)
+
         bot_exists, bot_info = await validate_bot_exists(bot_db_id)
+
         bot_display = f"<code>{bot_db_id}</code>"
         bot_owner_info = ""
+
         if bot_exists and bot_info:
             bot_display = f"@{bot_info['username']} (ID: <code>{bot_db_id}</code>)"
+
             if bot_info['owner']:
                 owner = bot_info['owner']
                 bot_owner_info = (
@@ -730,6 +736,7 @@ async def send_admin_notification(bot, user_id: int, bot_db_id: int, stars_amoun
                     f"• Имя: {owner['first_name']}\n"
                     f"• Username: @{owner['username']}" if owner['username'] else f"• Имя: {owner['first_name']}"
                 )
+
         message = (
             f"💰 <b>НОВОЕ ПОПОЛНЕНИЕ</b>\n\n"
             f"👤 <b>Пользователь:</b>\n"
@@ -744,13 +751,16 @@ async def send_admin_notification(bot, user_id: int, bot_db_id: int, stars_amoun
             f"💳 <b>Новый баланс пользователя:</b> {balance:.0f} ⭐️\n\n"
             f"🕐 <b>Время:</b> {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
         )
+
         await bot.send_message(
             chat_id=ADMIN_CHAT_ID,
             text=message,
             parse_mode="HTML"
         )
+
         logger.info(f"✅ Admin notification sent for payment {payment_id}")
         return True
+
     except Exception as e:
         logger.error(f"❌ Error sending admin notification: {e}")
         import traceback
@@ -1183,12 +1193,10 @@ def init_bot_handlers():
                     logger.info(f"👨‍💼 Owner: {bot_info['owner']['first_name']} (ID: {bot_info['owner']['uid']})")
 
                 try:
-                    # Rubles ni 0 yoki stars bilan bir xil qilish
                     success = await save_payment_transaction(
                         user_id=client_user_id,
                         source_bot_id=bot_db_id,
                         stars_amount=stars_amount,
-                        rubles_amount=stars_amount,  # Yoki 0
                         payment_id=payment_id,
                         payment_date=datetime.now()
                     )
