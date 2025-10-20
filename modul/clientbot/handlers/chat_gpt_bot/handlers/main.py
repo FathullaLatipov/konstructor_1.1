@@ -299,7 +299,8 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
 
     print(f"✅ User {user_id} subscribed to all channels or no channels found")
     try:
-        result = await get_user_balance_db(user_id, bot.token)
+        bot_db_id = await get_chatgpt_bot_db_id(message.bot.token)
+        result = await get_user_balance_db(user_id, bot_db_id)
         print(f"User {user_id} found in database: {result}")
         await message.answer(
             f'Привет {message.from_user.username}\nВаш баланс - {result[0][2]} ⭐️',
@@ -309,7 +310,10 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
         print(f"User {user_id} not found, creating new user")
         new_link = await create_start_link(message.bot, str(message.from_user.id), encode=True)
         link_for_db = new_link[new_link.index("=") + 1:]
-        await save_user(u=message.from_user, bot=bot, link=link_for_db, referrer_id=referral)
+        try:
+            await save_user(u=message.from_user, bot=bot, link=link_for_db, referrer_id=referral)
+        except TypeError:
+            await save_user(u=message.from_user, bot=bot, link=link_for_db)
 
         if referral and referral.isdigit():
             ref_id = int(referral)
