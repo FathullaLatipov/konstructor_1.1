@@ -14,7 +14,7 @@ from aiogram.fsm.context import FSMContext
 import asyncio
 from modul.clientbot.handlers.chat_gpt_bot import buttons as bt
 from modul.clientbot.handlers.chat_gpt_bot.all_openai import ChatGPT
-from modul.clientbot.handlers.main import save_user
+# from modul.clientbot.handlers.main import save_user
 from modul.loader import client_bot_router
 from modul.clientbot.handlers.chat_gpt_bot.states import AiState, AiAdminState, ChatGptFilter
 from modul.clientbot.handlers.chat_gpt_bot.shortcuts import (get_all_names, get_all_ids,
@@ -199,6 +199,7 @@ async def update_balance(message: types.Message, state: FSMContext):
 
 @client_bot_router.message(CommandStart())
 async def tp_to_start(message: types.Message, bot: Bot, state: FSMContext):
+    from modul.clientbot.handlers.main import save_user
     check_user = await default_checker(message.from_user.id)
     print(check_user, "check_user")
     if check_user is False:
@@ -217,6 +218,7 @@ async def tp_to_start(message: types.Message, bot: Bot, state: FSMContext):
 
 @client_bot_router.message(ChatGptFilter())
 async def start_message(message: types.Message, state: FSMContext, bot: Bot):
+    from modul.clientbot.handlers.main import save_user
     user_id = message.from_user.id
 
     if message.text == "/adminpayamount":
@@ -361,6 +363,7 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
 @client_bot_router.callback_query(F.data == "check_chan_chatgpt", ChatGptFilter())
 async def check_channels_chatgpt_callback(callback: CallbackQuery, state: FSMContext, bot: Bot):
     """ChatGPT bot uchun kanal obunasini tekshirish"""
+    from modul.clientbot.handlers.main import save_user
     user_id = callback.from_user.id
     print(f"🔍 ChatGPT check_chan callback triggered for user {user_id}")
 
