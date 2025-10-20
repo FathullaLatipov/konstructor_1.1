@@ -197,23 +197,23 @@ async def update_balance(message: types.Message, state: FSMContext):
         await message.answer('Error updating')
 
 
-@client_bot_router.message(CommandStart())
-async def tp_to_start(message: types.Message, bot: Bot, state: FSMContext):
-    from modul.clientbot.handlers.main import save_user
-    check_user = await default_checker(message.from_user.id)
-    print(check_user, "check_user")
-    if check_user is False:
-        new_link = await create_start_link(message.bot, str(message.from_user.id), encode=True)
-        link_for_db = new_link[new_link.index("=") + 1:]
-        await save_user(u=message.from_user, bot=bot, link=link_for_db)
-        await start_message(message)
-    elif check_user is True:
-        sent_message = await message.answer("Вы отправляетесь на старт")
-        await asyncio.sleep(1)
-        await message.delete()
-        await start_message(message)
-    else:
-        await message.answer('Технический перерыв')
+# @client_bot_router.message(CommandStart())
+# async def tp_to_start(message: types.Message, bot: Bot, state: FSMContext):
+#     from modul.clientbot.handlers.main import save_user
+#     check_user = await default_checker(message.from_user.id)
+#     print(check_user, "check_user")
+#     if check_user is False:
+#         new_link = await create_start_link(message.bot, str(message.from_user.id), encode=True)
+#         link_for_db = new_link[new_link.index("=") + 1:]
+#         await save_user(u=message.from_user, bot=bot, link=link_for_db)
+#         await start_message(message)
+#     elif check_user is True:
+#         sent_message = await message.answer("Вы отправляетесь на старт")
+#         await asyncio.sleep(1)
+#         await message.delete()
+#         await start_message(message)
+#     else:
+#         await message.answer('Технический перерыв')
 
 
 @client_bot_router.message(ChatGptFilter())
