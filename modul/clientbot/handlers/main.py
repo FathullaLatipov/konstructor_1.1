@@ -174,6 +174,7 @@ async def start(message: Message, state: FSMContext, bot: Bot):
 
                 result = await get_info_db(uid)
                 text = f'Привет {message.from_user.username}\nВаш баланс - {user_balance:.0f} ⭐️'
+                logger.debug(text,'main 177')
                 kwargs['reply_markup'] = builder.as_markup()
         else:
             kwargs['reply_markup'] = await reply_kb.main_menu(uid, bot)

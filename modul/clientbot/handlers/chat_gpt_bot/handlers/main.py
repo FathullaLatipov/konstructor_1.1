@@ -299,7 +299,7 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
 
     print(f"✅ User {user_id} subscribed to all channels or no channels found")
     try:
-        result = await get_info_db(user_id)
+        result = await get_user_balance_db(user_id, bot.token)
         print(f"User {user_id} found in database: {result}")
         await message.answer(
             f'Привет {message.from_user.username}\nВаш баланс - {result[0][2]} ⭐️',
@@ -423,7 +423,7 @@ async def check_channels_chatgpt_callback(callback: CallbackQuery, state: FSMCon
     except:
         pass
 
-    result = await get_info_db(user_id)
+    result = await get_user_balance_db(user_id, bot.token)
     await callback.message.answer(
         f'Привет {callback.from_user.username}\nВаш баланс - {result[0][2]}',
         reply_markup=bt.first_buttons()
@@ -592,9 +592,10 @@ async def chat_options_callback(callback: types.CallbackQuery, state: FSMContext
 
 @client_bot_router.callback_query(F.data.in_({"back", "back_on_menu"}))
 async def back_callback(callback: types.CallbackQuery, state: FSMContext, bot: Bot):
+    user_id = callback.from_user.id
     if callback.data == 'back':
         try:
-            result = await get_info_db(callback.from_user.id)
+            result = await get_user_balance_db(user_id, bot.token)
             print(result)
             await callback.message.edit_text(f'Привет {callback.from_user.username}\nВаш баланс - {result[0][2]}',
                                              reply_markup=bt.first_buttons())
