@@ -789,7 +789,7 @@ async def send_bot_owner_notification(bot, owner_uid: int, user_id: int, bot_use
             f"• Имя: {user_name}\n"
             f"• Username: @{username}\n\n"
             f"💎 <b>Сумма пополнения:</b> {stars_amount} ⭐️\n\n"
-            f"🔗 <b>ID платежа:</b> <code>{payment_id}</code>\n"
+            # f"🔗 <b>ID платежа:</b> <code>{payment_id}</code>\n"
             f"🕐 <b>Время:</b> {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n\n"
             f"✅ Средства зачислены на баланс пользователя в вашем боте."
         )
@@ -1167,7 +1167,7 @@ def init_bot_handlers():
                     await message.answer(
                         f"⚠️ <b>Оплата получена, но бот не найден!</b>\n\n"
                         f"💎 Оплачено: {stars_amount} ⭐️\n"
-                        f"🔗 ID платежа: <code>{payment_id}</code>\n\n"
+                        # f"🔗 ID платежа: <code>{payment_id}</code>\n\n"
                         f"📞 Обратитесь к администратору.",
                         parse_mode="HTML"
                     )
@@ -1179,7 +1179,7 @@ def init_bot_handlers():
                                  f"👤 User ID: <code>{client_user_id}</code>\n"
                                  f"🤖 Bot DB ID: <code>{bot_db_id}</code>\n"
                                  f"💰 Сумма: {stars_amount} ⭐️\n"
-                                 f"🔗 Payment ID: <code>{payment_id}</code>\n\n"
+                                 # f"🔗 Payment ID: <code>{payment_id}</code>\n\n"
                                  f"❌ Bot не найден в базе!",
                             parse_mode="HTML"
                         )
@@ -1242,7 +1242,7 @@ def init_bot_handlers():
                             f"💎 Оплачено: {stars_amount} ⭐️\n"
                             f"👤 Пользователь: <code>{client_user_id}</code>\n"
                             f"🤖 Бот: @{bot_info['username']}\n"
-                            f"🔗 ID платежа: <code>{payment_id}</code>\n\n"
+                            # f"🔗 ID платежа: <code>{payment_id}</code>\n\n"
                             f"📊 Баланс успешно пополнен!",
                             parse_mode="HTML"
                         )
@@ -1254,7 +1254,7 @@ def init_bot_handlers():
                         await message.answer(
                             f"⚠️ <b>Оплата получена, но возникла ошибка при сохранении!</b>\n\n"
                             f"💎 Оплачено: {stars_amount} ⭐️\n"
-                            f"🔗 ID: <code>{payment_id}</code>\n\n"
+                            # f"🔗 ID: <code>{payment_id}</code>\n\n"
                             f"📞 Обратитесь к администратору.",
                             parse_mode="HTML"
                         )
@@ -1266,7 +1266,7 @@ def init_bot_handlers():
 
                     await message.answer(
                         f"⚠️ <b>Оплата получена, но возникла ошибка!</b>\n\n"
-                        f"🔗 ID платежа: <code>{payment_id}</code>\n"
+                        # f"🔗 ID платежа: <code>{payment_id}</code>\n"
                         f"💰 Сумма: {stars_amount} ⭐️\n\n"
                         f"📞 Администратор уведомлен.",
                         parse_mode="HTML"
