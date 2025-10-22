@@ -733,7 +733,7 @@ async def gpt3(message: Message, state: FSMContext):
             return
 
         # 2. BALANSDAN YECHIB OLISH
-        success = await update_bc(tg_id=user_id, sign='-', amount=str(star_cost), bot_id=bot_db_id)
+        success = await update_bc(tg_id=user_id, sign='-', amount=star_cost, bot_id=bot_db_id)
 
         if not success:
             await message.answer('❌ Ошибка списания средств. Попробуйте /start')
@@ -773,7 +773,7 @@ async def gpt3(message: Message, state: FSMContext):
                 )
         else:
             # Xatolik - pul qaytariladi
-            await update_bc(tg_id=user_id, sign='+', amount=str(star_cost), bot_id=bot_db_id)
+            await update_bc(tg_id=user_id, sign='+', amount=star_cost, bot_id=bot_db_id)
             await message.answer('❌ Произошла ошибка при обработке запроса. Средства возвращены.')
 
             if not context:
@@ -784,7 +784,7 @@ async def gpt3(message: Message, state: FSMContext):
 
         # Xatolik bo'lsa, pul qaytariladi
         try:
-            await update_bc(tg_id=user_id, sign='+', amount=str(star_cost), bot_id=bot_db_id)
+            await update_bc(tg_id=user_id, sign='+', amount=star_cost, bot_id=bot_db_id)
             await message.answer('❌ Произошла ошибка при обработке запроса. Средства возвращены.')
         except:
             await message.answer('❌ Произошла ошибка при обработке запроса')
@@ -844,7 +844,7 @@ async def gpt4(message: Message, state: FSMContext):
             return
 
         # 2. BALANSDAN YECHIB OLISH
-        success = await update_bc(tg_id=user_id, sign='-', amount=str(star_cost), bot_id=bot_db_id)
+        success = await update_bc(tg_id=user_id, sign='-', amount=star_cost, bot_id=bot_db_id)
 
         if not success:
             await message.answer('❌ Ошибка списания средств. Попробуйте /start')
@@ -884,7 +884,7 @@ async def gpt4(message: Message, state: FSMContext):
                 )
         else:
             # Xatolik - pul qaytariladi
-            await update_bc(tg_id=user_id, sign='+', amount=str(star_cost), bot_id=bot_db_id)
+            await update_bc(tg_id=user_id, sign='+', amount=star_cost, bot_id=bot_db_id)
             await message.answer('❌ GPT4 Недоступен. Средства возвращены.')
 
             if not context:
@@ -895,7 +895,7 @@ async def gpt4(message: Message, state: FSMContext):
 
         # Xatolik bo'lsa, pul qaytariladi
         try:
-            await update_bc(tg_id=user_id, sign='+', amount=str(star_cost), bot_id=bot_db_id)
+            await update_bc(tg_id=user_id, sign='+', amount=star_cost, bot_id=bot_db_id)
             await message.answer('❌ Произошла ошибка при обработке запроса. Средства возвращены.')
         except:
             await message.answer('❌ Произошла ошибка при обработке запроса')
