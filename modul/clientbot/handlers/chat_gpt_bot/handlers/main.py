@@ -27,6 +27,16 @@ robot = ChatGPT()
 
 logger = logging.getLogger(__name__)
 
+# ==========================================
+# STAR NARXLARI KONSTANTASI
+# ==========================================
+STAR_PRICES = {
+    'gpt3_no_context': 1,
+    'gpt3_context': 2,
+    'gpt4_no_context': 3,
+    'gpt4_context': 4
+}
+
 
 def chat_gpt_bot_handlers():
     @client_bot_router.message(lambda message: message.text == "/adminpayamount")
@@ -39,121 +49,6 @@ def chat_gpt_bot_handlers():
 from modul.clientbot.handlers.chat_gpt_bot.all_openai import ChatGPT
 
 chatgpt = ChatGPT()
-
-
-# @client_bot_router.message(ChatGptFilter())
-# async def debug_all_handler(message: types.Message, state: FSMContext):
-#     current_state = await state.get_state()
-#     user_id = message.from_user.id
-#
-#     print(f"🔍 MESSAGE DEBUG:")
-#     print(f"   User: {user_id}")
-#     print(f"   Text: {message.text}")
-#     print(f"   State: {current_state}")
-#
-#     if current_state == 'waiting_for_gpt3':
-#         print(f"   🎯 GPT-3.5 aniqlandi!")
-#         await message.answer("⏳ Обрабатываю запрос...")
-#
-#         try:
-#             # GPT-3.5 chaqiruvi (context=False)
-#             response = chatgpt.chat_gpt(
-#                 user_id=user_id,
-#                 message=message.text,
-#                 gpt='gpt-3.5-turbo',
-#                 context=False
-#             )
-#
-#             if response:
-#                 await message.answer(f"🤖 GPT-3.5:\n{response}", reply_markup=bt.first_buttons())
-#             else:
-#                 await message.answer("❌ Произошла ошибка при обработке запроса")
-#
-#         except Exception as e:
-#             print(f"   ❌ GPT-3 xatolik: {e}")
-#             await message.answer("❌ Произошла ошибка при обработке запроса")
-#
-#         await state.clear()
-#         print(f"   ✅ State tozalandi!")
-#         return
-#
-#     elif current_state == 'waiting_for_gpt3_context':
-#         print(f"   🎯 GPT-3.5 context aniqlandi!")
-#         await message.answer("⏳ Обрабатываю запрос с контекстом...")
-#
-#         try:
-#             # GPT-3.5 chaqiruvi (context=True)
-#             response = chatgpt.chat_gpt(
-#                 user_id=user_id,
-#                 message=message.text,
-#                 gpt='gpt-3.5-turbo',
-#                 context=True
-#             )
-#
-#             if response:
-#                 await message.answer(f"🤖 GPT-3.5 (контекст):\n{response}")
-#             else:
-#                 await message.answer("❌ Произошла ошибка при обработке запроса")
-#
-#         except Exception as e:
-#             print(f"   ❌ GPT-3 context xatolik: {e}")
-#             await message.answer("❌ Произошла ошибка при обработке запроса")
-#
-#         # await state.clear()
-#         # print(f"   ✅ State tozalandi!")
-#         return
-#
-#     elif current_state == 'waiting_for_gpt4':
-#         print(f"   🎯 GPT-4 aniqlandi!")
-#         await message.answer("⏳ Обрабатываю запрос...")
-#
-#         try:
-#             response = chatgpt.chat_gpt(
-#                 user_id=user_id,
-#                 message=message.text,
-#                 gpt='gpt-4o',
-#                 context=False
-#             )
-#
-#             if response:
-#                 await message.answer(f"🤖 GPT-4:\n{response}", reply_markup=bt.first_buttons())
-#             else:
-#                 await message.answer("❌ Произошла ошибка при обработке запроса")
-#
-#         except Exception as e:
-#             print(f"   ❌ GPT-4 xatolik: {e}")
-#             await message.answer("❌ Произошла ошибка при обработке запроса")
-#
-#         await state.clear()
-#         print(f"   ✅ State tozalandi!")
-#         return
-#
-#     elif current_state == 'waiting_for_gpt4_context':
-#         print(f"   🎯 GPT-4 context aniqlandi!")
-#         await message.answer("⏳ Обрабатываю запрос с контекстом...")
-#
-#         try:
-#             response = chatgpt.chat_gpt(
-#                 user_id=user_id,
-#                 message=message.text,
-#                 gpt='gpt-4o',
-#                 context=True
-#             )
-#
-#             if response:
-#                 await message.answer(f"🤖 GPT-4 (контекст):\n{response}")
-#             else:
-#                 await message.answer("❌ Произошла ошибка при обработке запроса")
-#
-#         except Exception as e:
-#             print(f"   ❌ GPT-4 context xatolik: {e}")
-#             await message.answer("❌ Произошла ошибка при обработке запроса")
-#
-#         # await state.clear()
-#         # print(f"   ✅ State tozalandi!")
-#         return
-#
-#     print(f"   ⏭️ Keyingi handler...")
 
 
 @client_bot_router.message(AiAdminState.check_token_and_update)
@@ -195,9 +90,6 @@ async def update_balance(message: types.Message, state: FSMContext):
         await message.answer('Successfully updated')
     else:
         await message.answer('Error updating')
-
-
-
 
 
 @client_bot_router.message(
@@ -351,6 +243,7 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
 
     await state.clear()
 
+
 @client_bot_router.callback_query(F.data == "check_chan_chatgpt", ChatGptFilter())
 async def check_channels_chatgpt_callback(callback: CallbackQuery, state: FSMContext, bot: Bot):
     """ChatGPT bot uchun kanal obunasini tekshirish"""
@@ -479,6 +372,7 @@ async def chat_3_callback(callback: types.CallbackQuery):
         reply_markup=bt.choice_1_3_5()
     )
 
+
 # ==========================================
 # UTILITY FUNCTIONS
 # ==========================================
@@ -581,13 +475,14 @@ def get_user_balance_db(user_id: int, bot_identifier):
         logger.error(traceback.format_exc())
         return 0.0
 
+
 # ==========================================
-# GPT CHAT HANDLERS
+# GPT CHAT HANDLERS - YANGILANGAN
 # ==========================================
 
 @client_bot_router.callback_query(F.data.in_(['not', 'with', 'not4', 'with4', 'again_gpt3', 'again_gpt4']))
 async def chat_options_callback(callback: types.CallbackQuery, state: FSMContext):
-    """GPT tanlov - faqat Stars narxi"""
+    """GPT tanlov - balance checking bilan"""
     user_id = callback.from_user.id
 
     bot_db_id = await get_chatgpt_bot_db_id(callback.bot.token)
@@ -600,46 +495,78 @@ async def chat_options_callback(callback: types.CallbackQuery, state: FSMContext
 
     # Narxlar - Stars da
     prices = {
-        'not': 1, 'again_gpt3': 1,
-        'with': 2,
-        'not4': 3, 'again_gpt4': 3,
-        'with4': 4
+        'not': STAR_PRICES['gpt3_no_context'],
+        'again_gpt3': STAR_PRICES['gpt3_no_context'],
+        'with': STAR_PRICES['gpt3_context'],
+        'not4': STAR_PRICES['gpt4_no_context'],
+        'again_gpt4': STAR_PRICES['gpt4_no_context'],
+        'with4': STAR_PRICES['gpt4_context']
     }
 
     price = prices.get(callback.data, 1)
 
-    if user_balance >= price:
-        success = await update_bc(tg_id=user_id, sign='-', amount=price, bot_id=bot_db_id)
-
-        if success:
-            if callback.data in ['not', 'again_gpt3']:
-                await callback.message.answer('Пришлите свой запрос:')
-                await state.set_state(AiState.gpt3)
-                await state.update_data(context=False)  # ✅ Context ni state ga saqlaymiz
-
-            elif callback.data == 'with':
-                await callback.message.answer('Пришлите свой запрос:\n/start для выхода')
-                await state.set_state(AiState.gpt3)
-                await state.update_data(context=True)  # ✅ Context ni state ga saqlaymiz
-
-            elif callback.data in ['not4', 'again_gpt4']:
-                await callback.message.answer('Пришлите свой запрос:')
-                await state.set_state(AiState.gpt4)
-                await state.update_data(context=False)  # ✅ Context ni state ga saqlaymiz
-
-            elif callback.data == 'with4':
-                await callback.message.answer('Пришлите свой запрос:\n/start для выхода')
-                await state.set_state(AiState.gpt4)
-                await state.update_data(context=True)  # ✅ Context ni state ga saqlaymiz
-        else:
-            await callback.message.answer('Ошибка списания. Попробуйте /start')
-    else:
+    # BALANS TEKSHIRISH - ESKI KODDA BU YO'Q EDI!
+    if user_balance < price:
         await callback.message.answer(
-            f'Недостаточно средств!\n\n'
-            f'Ваш баланс: {user_balance:.0f} ⭐️\n'
-            f'Необходимо: {price} ⭐️\n\n'
-            f'Пополните баланс.'
+            f'⚠️ <b>Недостаточно средств!</b>\n\n'
+            f'💰 Ваш баланс: {user_balance:.0f} ⭐️\n'
+            f'💳 Требуется: {price} ⭐️\n'
+            f'📊 Не хватает: {price - user_balance:.0f} ⭐️\n\n'
+            f'💡 Пополните баланс для продолжения работы',
+            parse_mode="HTML",
+            reply_markup=bt.balance_menu()
         )
+        await callback.answer("❌ Недостаточно средств", show_alert=True)
+        return
+
+    # Balans yetarli - state o'rnatish (pul hali yechilmaydi!)
+    if callback.data in ['not', 'again_gpt3']:
+        await callback.message.answer(
+            f'🤖 <b>GPT-3.5 без контекста активирован</b>\n\n'
+            f'💬 Отправьте ваш вопрос\n'
+            f'💰 Стоимость: {price} ⭐️\n'
+            f'📊 Ваш баланс: {user_balance:.0f} ⭐️',
+            parse_mode="HTML"
+        )
+        await state.set_state(AiState.gpt3)
+        await state.update_data(context=False)
+
+    elif callback.data == 'with':
+        await callback.message.answer(
+            f'🤖 <b>GPT-3.5 с контекстом активирован</b>\n\n'
+            f'💬 Начните диалог\n'
+            f'💰 Стоимость за сообщение: {price} ⭐️\n'
+            f'📊 Ваш баланс: {user_balance:.0f} ⭐️\n\n'
+            f'ℹ️ Для выхода: /start или /reset',
+            parse_mode="HTML"
+        )
+        await state.set_state(AiState.gpt3)
+        await state.update_data(context=True)
+
+    elif callback.data in ['not4', 'again_gpt4']:
+        await callback.message.answer(
+            f'🤖 <b>GPT-4 без контекста активирован</b>\n\n'
+            f'💬 Отправьте ваш вопрос\n'
+            f'💰 Стоимость: {price} ⭐️\n'
+            f'📊 Ваш баланс: {user_balance:.0f} ⭐️',
+            parse_mode="HTML"
+        )
+        await state.set_state(AiState.gpt4)
+        await state.update_data(context=False)
+
+    elif callback.data == 'with4':
+        await callback.message.answer(
+            f'🤖 <b>GPT-4 с контекстом активирован</b>\n\n'
+            f'💬 Начните диалог\n'
+            f'💰 Стоимость за сообщение: {price} ⭐️\n'
+            f'📊 Ваш баланс: {user_balance:.0f} ⭐️\n\n'
+            f'ℹ️ Для выхода: /start или /reset',
+            parse_mode="HTML"
+        )
+        await state.set_state(AiState.gpt4)
+        await state.update_data(context=True)
+
+    await callback.answer()
 
 
 @client_bot_router.callback_query(F.data.in_({"back", "back_on_menu"}))
@@ -709,17 +636,39 @@ async def what_bot_can_do_callback(callback: types.CallbackQuery):
     )
 
 
-@client_bot_router.callback_query(F.data == "ref")
-async def ref_callback(callback: types.CallbackQuery):
-    await callback.message.answer("Нажмите на кнопку внизу", reply_markup=bt.ref())
-
-
-@client_bot_router.callback_query(F.data == "why")
-async def why_paid_callback(callback: types.CallbackQuery):
+@client_bot_router.callback_query(F.data == "use")
+async def how_to_use_callback(callback: types.CallbackQuery):
     await callback.message.edit_text(
-        '💲 Почему это платно?\n\n'
-        'Бот использует платные API на платформе OpenAI, '
-        'которые необходимы для его работы.',
+        '📖 Как использовать бота?\n\n'
+        'Просто выберите нужную функцию из меню и следуйте инструкциям. '
+        'Для генерации изображений опишите, что хотите увидеть. '
+        'Для озвучки текста отправьте текст, который хотите озвучить. '
+        'Для расшифровки аудио отправьте аудиофайл.',
+        reply_markup=bt.back_in_faq()
+    )
+
+
+@client_bot_router.callback_query(F.data == "balance")
+async def what_is_balance_callback(callback: types.CallbackQuery):
+    await callback.message.edit_text(
+        '💰 Что такое баланс?\n\n'
+        'Баланс — это ваши средства, которые используются для оплаты запросов к боту. '
+        'Каждый запрос к GPT, генерация изображения или озвучка текста стоит определенное количество рублей. '
+        'Баланс можно пополнить через платежную систему.',
+        reply_markup=bt.back_in_faq()
+    )
+
+
+@client_bot_router.callback_query(F.data == "functions")
+async def what_functions_callback(callback: types.CallbackQuery):
+    await callback.message.edit_text(
+        '🔧 Какие функции доступны?\n\n'
+        'Доступны следующие функции:\n'
+        '• GPT-3.5 и GPT-4 для ответов на вопросы\n'
+        '• Генерация изображений (DALL·E 3)\n'
+        '• Озвучка текста (TTS)\n'
+        '• Расшифровка аудио (Whisper)\n'
+        '• И другие функции, которые необходимы для его работы.',
         reply_markup=bt.back_in_faq()
     )
 
@@ -733,32 +682,23 @@ async def how_to_pay_callback(callback: types.CallbackQuery):
     )
 
 
-# @client_bot_router.message(lambda message: message.text not in ['/start', '/reset'], ChatGptFilter())
-# async def handle_text_input(message: Message, state: FSMContext):
-#     current_state = await state.get_state()
-#     print(f"Current state: {current_state}")
-#     if current_state == 'waiting_for_gpt3':
-#         await gpt3(message, context=False)
-#     elif current_state == 'waiting_for_gpt3_context':
-#         await gpt3(message, context=True)
-#     elif current_state == 'waiting_for_gpt4':
-#         await gpt4(message, context=False)
-#     elif current_state == 'waiting_for_gpt4_context':
-#         await gpt4(message, context=True)
-#     await state.clear()
-
-
+# ==========================================
+# GPT-3.5 HANDLER - YANGILANGAN
+# ==========================================
 @client_bot_router.message(AiState.gpt3, ChatGptFilter())
 async def gpt3(message: Message, state: FSMContext):
-    """GPT-3.5 handler"""
+    """GPT-3.5 handler with balance checking"""
 
-    # State dan context ni olish
     context_data = await state.get_data()
     context = context_data.get("context", False)
 
-    await message.bot.send_chat_action(message.chat.id, 'typing')
-
     user_id = message.from_user.id
+    bot_db_id = await get_chatgpt_bot_db_id(message.bot.token)
+
+    if not bot_db_id:
+        await message.answer("❌ Ошибка: бот не найден в базе данных")
+        await state.clear()
+        return
 
     # Context mode da reset komandalarini tekshirish
     if context and message.text in ['/start', '/restart', '/reset']:
@@ -766,15 +706,48 @@ async def gpt3(message: Message, state: FSMContext):
         await start_message(message, state, message.bot)
         return
 
-    # Faqat text qabul qilamiz
     if not message.text:
         await message.answer('Я могу обрабатывать только текст ! /start')
         return
 
-    try:
-        logger.info(f'GPT3 {"CONTEXT" if context else "NO_CONTEXT"} user_id={user_id}')
+    # Stars narxini aniqlash
+    star_cost = STAR_PRICES['gpt3_context'] if context else STAR_PRICES['gpt3_no_context']
 
-        # GPT ga so'rov
+    try:
+        # 1. BALANSNI TEKSHIRISH
+        current_balance = await get_user_balance_db(user_id, bot_db_id)
+
+        if current_balance < star_cost:
+            await message.answer(
+                f"⚠️ <b>Недостаточно средств!</b>\n\n"
+                f"💰 Ваш баланс: {current_balance:.0f} ⭐️\n"
+                f"💳 Требуется: {star_cost} ⭐️\n"
+                f"📊 Не хватает: {star_cost - current_balance:.0f} ⭐️\n\n"
+                f"💡 Пополните баланс для продолжения работы",
+                parse_mode="HTML",
+                reply_markup=bt.balance_menu()
+            )
+
+            if not context:
+                await state.clear()
+            return
+
+        # 2. BALANSDAN YECHIB OLISH
+        success = await update_bc(tg_id=user_id, sign='-', amount=str(star_cost), bot_id=bot_db_id)
+
+        if not success:
+            await message.answer('❌ Ошибка списания средств. Попробуйте /start')
+            if not context:
+                await state.clear()
+            return
+
+        new_balance = current_balance - star_cost
+
+        # 3. GPT SO'ROVINI BAJARISH
+        await message.bot.send_chat_action(message.chat.id, 'typing')
+
+        logger.info(f'GPT3 {"CONTEXT" if context else "NO_CONTEXT"} user_id={user_id}, stars_deducted={star_cost}')
+
         gpt_answer = robot.chat_gpt(
             user_id=user_id,
             message=message.text,
@@ -783,37 +756,60 @@ async def gpt3(message: Message, state: FSMContext):
         )
 
         if gpt_answer:
+            # Javobni yuborish + balans ma'lumoti
+            balance_info = f"\n\n💰 Списано: {star_cost} ⭐️ | Остаток: {new_balance:.0f} ⭐️"
+
             if not context:
-                # Context bo'lmasa - again button va state clear
-                await message.answer(gpt_answer, parse_mode='Markdown', reply_markup=bt.again_gpt3())
+                await message.answer(
+                    gpt_answer + balance_info,
+                    parse_mode='Markdown',
+                    reply_markup=bt.again_gpt3()
+                )
                 await state.clear()
             else:
-                # Context bo'lsa - button yo'q, state saqlanadi
-                await message.answer(gpt_answer, parse_mode='Markdown')
-                # State saqlanadi - keyingi xabar ham shu handler ga tushadi
+                await message.answer(
+                    gpt_answer + balance_info,
+                    parse_mode='Markdown'
+                )
         else:
-            await message.answer('❌ Произошла ошибка при обработке запроса')
+            # Xatolik - pul qaytariladi
+            await update_bc(tg_id=user_id, sign='+', amount=str(star_cost), bot_id=bot_db_id)
+            await message.answer('❌ Произошла ошибка при обработке запроса. Средства возвращены.')
+
             if not context:
                 await state.clear()
 
     except Exception as e:
         logger.error(f'GPT3 Error: {e}', exc_info=True)
-        await message.answer('❌ Произошла ошибка при обработке запроса')
+
+        # Xatolik bo'lsa, pul qaytariladi
+        try:
+            await update_bc(tg_id=user_id, sign='+', amount=str(star_cost), bot_id=bot_db_id)
+            await message.answer('❌ Произошла ошибка при обработке запроса. Средства возвращены.')
+        except:
+            await message.answer('❌ Произошла ошибка при обработке запроса')
+
         if not context:
             await state.clear()
 
 
+# ==========================================
+# GPT-4 HANDLER - YANGILANGAN
+# ==========================================
 @client_bot_router.message(AiState.gpt4, ChatGptFilter())
 async def gpt4(message: Message, state: FSMContext):
-    """GPT-4 handler"""
+    """GPT-4 handler with balance checking"""
 
-    # State dan context ni olish
     context_data = await state.get_data()
     context = context_data.get("context", False)
 
-    await message.bot.send_chat_action(message.chat.id, 'typing')
-
     user_id = message.from_user.id
+    bot_db_id = await get_chatgpt_bot_db_id(message.bot.token)
+
+    if not bot_db_id:
+        await message.answer("❌ Ошибка: бот не найден в базе данных")
+        await state.clear()
+        return
 
     # Context mode da reset komandalarini tekshirish
     if context and message.text in ['/start', '/restart', '/reset']:
@@ -821,41 +817,92 @@ async def gpt4(message: Message, state: FSMContext):
         await start_message(message, state, message.bot)
         return
 
-    # Faqat text qabul qilamiz
     if not message.text:
         await message.answer('Я могу обрабатывать только текст ! /start')
         return
 
-    try:
-        logger.info(f'GPT4 {"CONTEXT" if context else "NO_CONTEXT"} user_id={user_id}')
+    # Stars narxini aniqlash
+    star_cost = STAR_PRICES['gpt4_context'] if context else STAR_PRICES['gpt4_no_context']
 
-        # GPT ga so'rov
+    try:
+        # 1. BALANSNI TEKSHIRISH
+        current_balance = await get_user_balance_db(user_id, bot_db_id)
+
+        if current_balance < star_cost:
+            await message.answer(
+                f"⚠️ <b>Недостаточно средств!</b>\n\n"
+                f"💰 Ваш баланс: {current_balance:.0f} ⭐️\n"
+                f"💳 Требуется: {star_cost} ⭐️\n"
+                f"📊 Не хватает: {star_cost - current_balance:.0f} ⭐️\n\n"
+                f"💡 Пополните баланс для продолжения работы",
+                parse_mode="HTML",
+                reply_markup=bt.balance_menu()
+            )
+
+            if not context:
+                await state.clear()
+            return
+
+        # 2. BALANSDAN YECHIB OLISH
+        success = await update_bc(tg_id=user_id, sign='-', amount=str(star_cost), bot_id=bot_db_id)
+
+        if not success:
+            await message.answer('❌ Ошибка списания средств. Попробуйте /start')
+            if not context:
+                await state.clear()
+            return
+
+        new_balance = current_balance - star_cost
+
+        # 3. GPT SO'ROVINI BAJARISH
+        await message.bot.send_chat_action(message.chat.id, 'typing')
+
+        logger.info(f'GPT4 {"CONTEXT" if context else "NO_CONTEXT"} user_id={user_id}, stars_deducted={star_cost}')
+
         gpt_answer = robot.chat_gpt(
             user_id=user_id,
             message=message.text,
-            gpt="gpt-4o",  # yoki "gpt-4-1106-preview"
+            gpt="gpt-4o",
             context=context
         )
 
         if gpt_answer:
+            # Javobni yuborish + balans ma'lumoti
+            balance_info = f"\n\n💰 Списано: {star_cost} ⭐️ | Остаток: {new_balance:.0f} ⭐️"
+
             if not context:
-                # Context bo'lmasa - again button va state clear
-                await message.answer(gpt_answer, parse_mode='Markdown', reply_markup=bt.again_gpt4())
+                await message.answer(
+                    gpt_answer + balance_info,
+                    parse_mode='Markdown',
+                    reply_markup=bt.again_gpt4()
+                )
                 await state.clear()
             else:
-                # Context bo'lsa - button yo'q, state saqlanadi
-                await message.answer(gpt_answer, parse_mode='Markdown')
-                # State saqlanadi - keyingi xabar ham shu handler ga tushadi
+                await message.answer(
+                    gpt_answer + balance_info,
+                    parse_mode='Markdown'
+                )
         else:
-            await message.answer('GPT4 Недоступен', parse_mode='Markdown')
+            # Xatolik - pul qaytariladi
+            await update_bc(tg_id=user_id, sign='+', amount=str(star_cost), bot_id=bot_db_id)
+            await message.answer('❌ GPT4 Недоступен. Средства возвращены.')
+
             if not context:
                 await state.clear()
 
     except Exception as e:
         logger.error(f'GPT4 Error: {e}', exc_info=True)
-        await message.answer('❌ Произошла ошибка при обработке запроса')
+
+        # Xatolik bo'lsa, pul qaytariladi
+        try:
+            await update_bc(tg_id=user_id, sign='+', amount=str(star_cost), bot_id=bot_db_id)
+            await message.answer('❌ Произошла ошибка при обработке запроса. Средства возвращены.')
+        except:
+            await message.answer('❌ Произошла ошибка при обработке запроса')
+
         if not context:
             await state.clear()
+
 
 # ==========================================
 # BALANCE & PAYMENT HANDLERS
