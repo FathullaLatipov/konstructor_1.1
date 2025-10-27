@@ -978,10 +978,15 @@ def init_bot_handlers():
         try:
             parts = payment_args.split("_")
 
-            if len(parts) >= 4:
-                client_user_id = int(parts[1])
-                stars_amount = int(parts[2])
-                bot_db_id = int(parts[3])
+            # Yangi format: gptbot_userid_3_requests_16 (5 ta qism)
+            if len(parts) >= 5:
+                client_user_id = int(parts[1])  # user ID
+                requests_count = int(parts[2])  # 3, 5, 10, 15, 25
+                # parts[3] = 'requests' (skip)
+                bot_db_id = int(parts[4])  # bot database ID
+
+                # Stars ni hisoblaymiz: har bir so'rov uchun 3 stars
+                stars_amount = requests_count * 3
 
                 bot_exists, bot_info = await validate_bot_exists(bot_db_id)
 
@@ -999,6 +1004,7 @@ def init_bot_handlers():
                 logger.info("💳 CREATING INVOICE...")
                 logger.info(f"🤖 Main bot ID: {message.bot.id}")
                 logger.info(f"👤 Client user: {client_user_id}")
+                logger.info(f"📝 Requests: {requests_count}")
                 logger.info(f"⭐ Stars: {stars_amount}")
                 logger.info(f"🔗 Target bot DB ID: {bot_db_id}")
                 if bot_info:
@@ -1011,10 +1017,10 @@ def init_bot_handlers():
                 try:
                     await message.answer_invoice(
                         title="Пополнение баланса ChatGPT бота",
-                        description=f"Пополнение на {stars_amount} ⭐️",
-                        payload=f"gptbot_topup_{client_user_id}_{stars_amount}_{bot_db_id}",
+                        description=f"Пополнение на {requests_count} запросов ({stars_amount} ⭐️)",
+                        payload=f"gptbot_topup_{client_user_id}_{requests_count}_{bot_db_id}",
                         currency="XTR",
-                        prices=[LabeledPrice(label=f"{stars_amount} ⭐️", amount=stars_amount)],
+                        prices=[LabeledPrice(label=f"{requests_count} запросов", amount=stars_amount)],
                         provider_token="",
                     )
 
