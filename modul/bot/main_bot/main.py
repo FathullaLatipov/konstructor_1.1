@@ -978,20 +978,14 @@ def init_bot_handlers():
         try:
             parts = payment_args.split("_")
 
-            # Hozirgi format: gptbot_userid_3_requests_16
-            # parts[0] = 'gptbot'
-            # parts[1] = '1161180912' (user_id)
-            # parts[2] = '3' (requests count)
-            # parts[3] = 'requests' (so'z - skip)
-            # parts[4] = '16' (bot_db_id)
-
+            # Format: gptbot_userid_3_requests_16
             if len(parts) >= 5 and parts[3] == 'requests':
                 client_user_id = int(parts[1])  # user ID
                 requests_count = int(parts[2])  # 3, 5, 10, 15, 25
                 # parts[3] = 'requests' - skip
                 bot_db_id = int(parts[4])  # bot database ID
 
-                # Stars ni hisoblash: har bir request = 3 stars
+                # Stars ni hisoblash
                 stars_amount = requests_count * 3  # 9, 15, 30, 45, 75
 
                 bot_exists, bot_info = await validate_bot_exists(bot_db_id)
@@ -1103,12 +1097,17 @@ def init_bot_handlers():
                 logger.info("✅ Payload format valid")
 
                 try:
+                    # Payload format: gptbot_topup_{user_id}_{requests}_{bot_id}
                     parts = payload.split("_")
                     client_user_id = int(parts[2])
-                    stars_amount = int(parts[3])
+                    requests_count = int(parts[3])  # 3, 5, 10, 15, 25
                     bot_db_id = int(parts[4])
 
-                    logger.info(f"📊 Parsed: user={client_user_id}, stars={stars_amount}, bot_db_id={bot_db_id}")
+                    # Stars ni hisoblash
+                    stars_amount = requests_count * 3  # 9, 15, 30, 45, 75
+
+                    logger.info(
+                        f"📊 Parsed: user={client_user_id}, requests={requests_count}, stars={stars_amount}, bot_db_id={bot_db_id}")
 
                     await pre_checkout_query.answer(ok=True)
 
@@ -1162,13 +1161,18 @@ def init_bot_handlers():
             logger.info(f"Total amount: {payment.total_amount}")
 
             if payload.startswith("gptbot_topup_"):
+                # Payload format: gptbot_topup_{user_id}_{requests}_{bot_id}
                 parts = payload.split("_")
                 client_user_id = int(parts[2])
-                stars_amount = int(parts[3])
+                requests_count = int(parts[3])  # 3, 5, 10, 15, 25
                 bot_db_id = int(parts[4])
+
+                # Stars ni hisoblash
+                stars_amount = requests_count * 3  # 9, 15, 30, 45, 75
 
                 logger.info(f"📊 Payment details:")
                 logger.info(f"  - Client: {client_user_id}")
+                logger.info(f"  - Requests: {requests_count}")
                 logger.info(f"  - Stars: {stars_amount}")
                 logger.info(f"  - Bot DB ID: {bot_db_id}")
 
@@ -1178,8 +1182,8 @@ def init_bot_handlers():
                     logger.error(f"❌ Bot {bot_db_id} not found during payment processing!")
                     await message.answer(
                         f"⚠️ <b>Оплата получена, но бот не найден!</b>\n\n"
+                        f"📝 Запросов: {requests_count}\n"
                         f"💎 Оплачено: {stars_amount} ⭐️\n"
-                        # f"🔗 ID платежа: <code>{payment_id}</code>\n\n"
                         f"📞 Обратитесь к администратору.",
                         parse_mode="HTML"
                     )
@@ -1190,8 +1194,8 @@ def init_bot_handlers():
                             text=f"⚠️ <b>ВНИМАНИЕ: Платеж для несуществующего бота!</b>\n\n"
                                  f"👤 User ID: <code>{client_user_id}</code>\n"
                                  f"🤖 Bot DB ID: <code>{bot_db_id}</code>\n"
+                                 f"📝 Запросов: {requests_count}\n"
                                  f"💰 Сумма: {stars_amount} ⭐️\n"
-                                 # f"🔗 Payment ID: <code>{payment_id}</code>\n\n"
                                  f"❌ Bot не найден в базе!",
                             parse_mode="HTML"
                         )
@@ -1251,10 +1255,10 @@ def init_bot_handlers():
 
                         await message.answer(
                             f"✅ <b>Оплата прошла успешно!</b>\n\n"
+                            f"📝 Запросов: {requests_count}\n"
                             f"💎 Оплачено: {stars_amount} ⭐️\n"
                             f"👤 Пользователь: <code>{client_user_id}</code>\n"
                             f"🤖 Бот: @{bot_info['username']}\n"
-                            # f"🔗 ID платежа: <code>{payment_id}</code>\n\n"
                             f"📊 Баланс успешно пополнен!",
                             parse_mode="HTML"
                         )
@@ -1265,8 +1269,8 @@ def init_bot_handlers():
                         logger.error("❌ Failed to save payment")
                         await message.answer(
                             f"⚠️ <b>Оплата получена, но возникла ошибка при сохранении!</b>\n\n"
+                            f"📝 Запросов: {requests_count}\n"
                             f"💎 Оплачено: {stars_amount} ⭐️\n"
-                            # f"🔗 ID: <code>{payment_id}</code>\n\n"
                             f"📞 Обратитесь к администратору.",
                             parse_mode="HTML"
                         )
@@ -1278,7 +1282,7 @@ def init_bot_handlers():
 
                     await message.answer(
                         f"⚠️ <b>Оплата получена, но возникла ошибка!</b>\n\n"
-                        # f"🔗 ID платежа: <code>{payment_id}</code>\n"
+                        f"📝 Запросов: {requests_count}\n"
                         f"💰 Сумма: {stars_amount} ⭐️\n\n"
                         f"📞 Администратор уведомлен.",
                         parse_mode="HTML"
@@ -1290,13 +1294,6 @@ def init_bot_handlers():
             logger.error(f"❌ CRITICAL ERROR in successful_payment_handler: {e}")
             import traceback
             logger.error(traceback.format_exc())
-
-            await message.answer(
-                "❌ Критическая ошибка при обработке оплаты.\n"
-                "Администратор уведомлен.",
-                parse_mode="HTML"
-            )
-            logger.info("=" * 50)
 
     # ===== OTHER HANDLERS =====
 
