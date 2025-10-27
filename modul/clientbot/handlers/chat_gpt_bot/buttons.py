@@ -22,12 +22,14 @@ def balance_menu():
 
 def top_up_options():
     builder = InlineKeyboardBuilder()
-    builder.button(text='💎 1 Star = 5₽', callback_data='topup_1_star')
-    builder.button(text='💎 5 Stars = 25₽', callback_data='topup_5_stars')
+    builder.button(text='3 запроса - 9 ⭐️', callback_data='topup_3_requests')
+    builder.button(text='5 запросов - 15 ⭐️', callback_data='topup_5_requests')
+    builder.button(text='10 запросов - 30 ⭐️', callback_data='topup_10_requests')
+    builder.button(text='15 запросов - 45 ⭐️', callback_data='topup_15_requests')
+    builder.button(text='25 запросов - 75 ⭐️', callback_data='topup_25_requests')
     builder.button(text='🔙 Назад', callback_data='show_balance')
-    builder.adjust(1, 1, 1)
+    builder.adjust(1, 1, 1, 1, 1, 1)
     return builder.as_markup()
-
 
 def ref():
     return ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text='💸Заработать')]], resize_keyboard=True)
