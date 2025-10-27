@@ -978,19 +978,21 @@ def init_bot_handlers():
         try:
             parts = payment_args.split("_")
 
-            # Format: gptbot_userid_requests_stars_botid
-            # Misol: gptbot_1161180912_3_9_16
+            # Hozirgi format: gptbot_userid_3_requests_16
             # parts[0] = 'gptbot'
             # parts[1] = '1161180912' (user_id)
-            # parts[2] = '3' (requests count - faqat display uchun)
-            # parts[3] = '9' (stars amount - ASOSIY!)
+            # parts[2] = '3' (requests count)
+            # parts[3] = 'requests' (so'z - skip)
             # parts[4] = '16' (bot_db_id)
 
-            if len(parts) >= 5:
+            if len(parts) >= 5 and parts[3] == 'requests':
                 client_user_id = int(parts[1])  # user ID
-                requests_count = int(parts[2])  # 3, 5, 10, 15, 25 (faqat ko'rsatish uchun)
-                stars_amount = int(parts[3])  # 9, 15, 30, 45, 75 (ASOSIY!)
+                requests_count = int(parts[2])  # 3, 5, 10, 15, 25
+                # parts[3] = 'requests' - skip
                 bot_db_id = int(parts[4])  # bot database ID
+
+                # Stars ni hisoblash: har bir request = 3 stars
+                stars_amount = requests_count * 3  # 9, 15, 30, 45, 75
 
                 bot_exists, bot_info = await validate_bot_exists(bot_db_id)
 
@@ -1008,8 +1010,8 @@ def init_bot_handlers():
                 logger.info("💳 CREATING INVOICE...")
                 logger.info(f"🤖 Main bot ID: {message.bot.id}")
                 logger.info(f"👤 Client user: {client_user_id}")
-                logger.info(f"📝 Requests (display): {requests_count}")
-                logger.info(f"⭐ Stars (payment): {stars_amount}")
+                logger.info(f"📝 Requests: {requests_count}")
+                logger.info(f"⭐ Stars (calculated): {stars_amount}")
                 logger.info(f"🔗 Target bot DB ID: {bot_db_id}")
                 if bot_info:
                     logger.info(f"🤖 Bot info: @{bot_info['username']}")
@@ -1022,7 +1024,7 @@ def init_bot_handlers():
                     await message.answer_invoice(
                         title="Пополнение баланса ChatGPT бота",
                         description=f"{requests_count} запросов за {stars_amount} ⭐️",
-                        payload=f"gptbot_topup_{client_user_id}_{requests_count}_{stars_amount}_{bot_db_id}",
+                        payload=f"gptbot_topup_{client_user_id}_{requests_count}_{bot_db_id}",
                         currency="XTR",
                         prices=[LabeledPrice(label=f"{requests_count} запросов", amount=stars_amount)],
                         provider_token="",
