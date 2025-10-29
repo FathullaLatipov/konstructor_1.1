@@ -12,8 +12,13 @@ from aiogram.utils.deep_linking import create_start_link
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.fsm.context import FSMContext
 import asyncio
+
+from modul.clientbot import shortcuts
+from modul.clientbot.handlers.admin.keyboards import main_menu_bt
 from modul.clientbot.handlers.chat_gpt_bot import buttons as bt
 from modul.clientbot.handlers.chat_gpt_bot.all_openai import ChatGPT
+from modul.clientbot.handlers.refs.handlers.bot import banned, check_channels
+from modul.clientbot.handlers.refs.shortcuts import get_actual_price
 # from modul.clientbot.handlers.main import save_user
 from modul.loader import client_bot_router
 from modul.clientbot.handlers.chat_gpt_bot.states import AiState, AiAdminState, ChatGptFilter
@@ -317,7 +322,6 @@ async def check_channels_chatgpt_callback(callback: CallbackQuery, state: FSMCon
                     except Exception as e:
                         print(f"Error sending referral notification: {e}")
 
-    # Xabarni o'chirish va asosiy menyuni ko'rsatish
     try:
         await callback.message.delete()
     except:
@@ -907,6 +911,38 @@ async def gpt4(message: Message, state: FSMContext):
 # ==========================================
 # BALANCE & PAYMENT HANDLERS
 # ==========================================
+
+@client_bot_router.callback_query(F.data == "ref",ChatGptFilter())
+async def gain(message: Message, bot: Bot, state: FSMContext):
+    bot_db = await shortcuts.get_bot(bot)
+    await state.clear()
+    if shortcuts.have_one_module(bot_db, 'chatgpt'):
+        channels_checker = await check_channels(message)
+        checker_banned = await banned(message)
+        if channels_checker and checker_banned:
+            me = await bot.get_me()
+            link = f"https://t.me/{me.username}?start={message.from_user.id}"
+
+            price = await get_actual_price(bot.token)
+
+            await message.bot.send_message(message.from_user.id,
+                                           f"👥 Приглашай друзей и зарабатывай, за \nкаждого друга ты получишь {price}₽\n\n"
+                                           f"🔗 Ваша ссылка для приглашений:\n {link}",
+                                           reply_markup=await main_menu_bt())
+    else:
+        channels_checker = await check_channels(message)
+        checker_banned = await banned(message)
+        if channels_checker and checker_banned:
+            me = await bot.get_me()
+            link = f"https://t.me/{me.username}?start={message.from_user.id}"
+
+            price = await get_actual_price(bot.token)
+
+            await message.bot.send_message(message.from_user.id,
+                                           f"👥 Приглашай друзей и зарабатывай, за \nкаждого друга ты получишь {price}₽\n\n"
+                                           f"🔗 Ваша ссылка для приглашений:\n {link}"
+                                           "\n Что бы вернуть функционал основного бота напишите /start",
+                                           reply_markup=await main_menu_bt())
 
 @client_bot_router.callback_query(F.data == "show_balance")
 async def show_balance_callback(callback: types.CallbackQuery):
