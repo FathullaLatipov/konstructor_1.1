@@ -49,7 +49,7 @@ from yt_dlp import YoutubeDL
 from modul import models
 from modul.clientbot import shortcuts
 from modul.clientbot.data.states import Download
-from modul.clientbot.handlers.annon_bot.handlers.bot import check_channels, process_referral, check_if_already_referred
+from modul.clientbot.handlers.annon_bot.handlers.bot import check_channels, check_if_already_referred
 from modul.clientbot.handlers.annon_bot.keyboards.buttons import channels_in
 from modul.clientbot.handlers.annon_bot.userservice import get_channels_for_check, check_user, add_user, get_user_by_id
 from modul.clientbot.handlers.chat_gpt_bot.shortcuts import get_info_db
@@ -1556,6 +1556,100 @@ class NonChatGptFilter(Filter):
         bot_db = await shortcuts.get_bot(bot)
         return not shortcuts.have_one_module(bot_db, "chatgpt")
 
+
+async def process_referral(inviter_id: int, new_user_id: int, current_bot_token: str):
+    """
+    Referral jarayonini to'liq boshqaradi
+
+    Args:
+        inviter_id: Refer qilgan user ID (masalan: 1161180912)
+        new_user_id: Yangi kelgan user ID (masalan: 8164769517)
+        current_bot_token: Joriy bot token
+    """
+    from asgiref.sync import sync_to_async
+
+    try:
+        # 1. Parametrlarni tekshirish va logging
+        logger.info(f"process_referral started: inviter={inviter_id}, new_user={new_user_id}")
+
+        # 2. Botni topish
+        from modul.models import Bot, AdminInfo
+
+        bot = await sync_to_async(Bot.objects.filter(token=current_bot_token).first)()
+
+        if not bot:
+            logger.error(f"Bot not found with token: {current_bot_token}")
+            return False
+
+        logger.info(f"Found bot: {bot.username} (ID: {bot.id})")
+
+        # 3. Inviter'ni shu botdan topish
+        inviter = await sync_to_async(
+            ClientBotUser.objects.filter(
+                uid=inviter_id,
+                bot=bot
+            ).select_related('user').first
+        )()
+
+        if not inviter:
+            logger.warning(f"Inviter {inviter_id} not found in bot {bot.username}")
+            return False
+
+        logger.info(f"Inviter found: {inviter.uid}, current balance: {inviter.balance}")
+
+        # 4. Reward miqdorini olish
+        try:
+            admin_info = await sync_to_async(AdminInfo.objects.filter(bot_token=bot.token).first)()
+            reward_amount = float(admin_info.price) if admin_info and admin_info.price else 3.0
+        except Exception as e:
+            logger.error(f"Error getting reward amount: {e}")
+            reward_amount = 3.0
+
+        logger.info(f"Reward amount: {reward_amount}")
+
+        # 5. Inviter balansini yangilash
+        inviter.balance += reward_amount
+        inviter.referral_count += 1
+        inviter.referral_balance += reward_amount
+
+        await sync_to_async(inviter.save)()
+
+        logger.info(
+            f"Referral completed! Inviter {inviter_id}: "
+            f"balance={inviter.balance}, "
+            f"referral_count={inviter.referral_count}"
+        )
+
+        # 6. Bildirishnoma jo'natish
+        try:
+            from aiogram import Bot as AiogramBot
+            from modul.loader import bot_session
+
+            async with AiogramBot(token=bot.token, session=bot_session).context() as bot_instance:
+                user_link = f'<a href="tg://user?id={new_user_id}">новый друг</a>'
+                notification_text = (
+                    f"🎉 У вас {user_link}!\n"
+                    f"💰 Баланс пополнен на {reward_amount}₽\n"
+                    f"👥 Всего рефералов: {inviter.referral_count}"
+                )
+
+                await bot_instance.send_message(
+                    chat_id=inviter_id,
+                    text=notification_text,
+                    parse_mode="HTML"
+                )
+                logger.info(f"Notification sent to inviter {inviter_id}")
+        except Exception as e:
+            logger.error(f"Error sending notification to {inviter_id}: {e}")
+            # Bildirishnoma yuborilmasa ham, referral muvaffaqiyatli hisoblanadi
+
+        return True
+
+    except Exception as e:
+        logger.error(f"Error in process_referral: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
 
 @client_bot_router.callback_query(lambda c: c.data == 'check_chan', NonChatGptFilter())
 async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: Bot):
