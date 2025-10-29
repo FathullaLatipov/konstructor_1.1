@@ -1651,6 +1651,7 @@ async def process_referral(inviter_id: int, new_user_id: int, current_bot_token:
         logger.error(traceback.format_exc())
         return False
 
+
 @client_bot_router.callback_query(lambda c: c.data == 'check_chan', NonChatGptFilter())
 async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: Bot):
     user_id = callback.from_user.id
@@ -1658,102 +1659,110 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
     print("kino 978")
     subscribed = True
     not_subscribed_channels = []
-    channels = await get_channels_for_check()
 
-    if channels:
-        for channel_id, channel_url in channels:
+    # ✅ TO'G'RILANGAN: Kanal turini ham olish
+    channels_with_type = await get_channels_with_type_for_check()
+
+    if channels_with_type:
+        for channel_id, channel_url, channel_type in channels_with_type:
             try:
-                member = await bot.get_chat_member(chat_id=channel_id, user_id=user_id)
-                print(f"Channel {channel_id} status: {member.status}")
+                # ✅ System kanallarni main_bot orqali tekshirish
+                if channel_type == 'system':
+                    member = await main_bot.get_chat_member(chat_id=int(channel_id), user_id=user_id)
+                    logger.info(f"System channel {channel_id} checked via main_bot: {member.status}")
+                else:
+                    # Sponsor kanallarni joriy bot orqali tekshirish
+                    member = await bot.get_chat_member(chat_id=int(channel_id), user_id=user_id)
 
-                if member.status == "left":
+                print(f"Channel {channel_id} (type: {channel_type}) status: {member.status}")
+
+                if member.status in ["left", "kicked"]:
                     subscribed = False
                     try:
-                        chat_info = await bot.get_chat(chat_id=channel_id)
+                        # System kanallar uchun main_bot, sponsor uchun joriy bot
+                        check_bot = main_bot if channel_type == 'system' else bot
+                        chat_info = await check_bot.get_chat(chat_id=int(channel_id))
                         not_subscribed_channels.append({
                             'id': channel_id,
                             'title': chat_info.title,
-                            'invite_link': channel_url or chat_info.invite_link or f"https://t.me/{channel_id.strip('-')}"
+                            'invite_link': channel_url or chat_info.invite_link or f"https://t.me/{channel_id.strip('-')}",
+                            'type': channel_type
                         })
                     except Exception as e:
                         print(f"⚠️ Error getting chat info for channel {channel_id}: {e}")
                         not_subscribed_channels.append({
                             'id': channel_id,
                             'title': f"Канал {channel_id}",
-                            'invite_link': channel_url or f"https://t.me/{channel_id.strip('-')}"
+                            'invite_link': channel_url or f"https://t.me/{channel_id.strip('-')}",
+                            'type': channel_type
                         })
             except Exception as e:
-                logger.error(f"Error checking channel {channel_id}: {e}")
+                logger.error(f"Error checking channel {channel_id} (type: {channel_type}): {e}")
+
+                # ✅ Faqat sponsor kanallarni o'chirish
+                if channel_type == 'sponsor':
+                    await remove_sponsor_channel(channel_id)
+                    logger.info(f"Removed invalid sponsor channel {channel_id}")
+                else:
+                    # System kanallar uchun faqat log
+                    logger.warning(f"System channel {channel_id} access error (ignoring): {e}")
+
                 continue
 
     if not subscribed:
-
         await callback.answer("⚠️ Вы не подписались на все каналы! Пожалуйста, подпишитесь на все указанные каналы.",
                               show_alert=True)
 
-
         channels_text = f"📢 **Для использования бота необходимо подписаться на каналы:**\n\n"
-
         markup = InlineKeyboardBuilder()
 
         for index, channel in enumerate(not_subscribed_channels):
             title = channel['title']
             invite_link = channel['invite_link']
-
             channels_text += f"{index + 1}. {title}\n"
             markup.button(text=f"📢 {title}", url=invite_link)
 
         markup.button(text="✅ Проверить подписку", callback_data="check_chan")
-        markup.adjust(1)  # Har bir qatorda 1 ta tugma
+        markup.adjust(1)
 
         try:
-
             await callback.message.edit_text(
                 channels_text + f"\n\nПосле подписки на все каналы нажмите кнопку «Проверить подписку».",
                 reply_markup=markup.as_markup(),
                 parse_mode="HTML"
             )
         except Exception as e:
-
             try:
                 await callback.message.delete()
             except:
-                pass  # Agar o'chirishda xatolik bo'lsa, e'tiborsiz qoldiramiz
-
-
+                pass
             await callback.message.answer(
                 channels_text + f"\n\nПосле подписки на все каналы нажмите кнопку «Проверить подписку».",
                 reply_markup=markup.as_markup(),
                 parse_mode="HTML"
             )
-
         return
 
     await callback.answer("Вы успешно подписались на все каналы!")
 
-
+    # =================== USER PROCESSING ===================
     user_exists = await check_user(user_id)
 
-
+    # State'dan referral ID olish
     referral_id = None
-
-
     data = await state.get_data()
     referral = data.get('referral')
     if referral and str(referral).isdigit():
         referral_id = int(referral)
         logger.info(f"Got referral ID from state: {referral_id}")
 
-
+    # Yangi user
     if not user_exists:
         try:
-
             new_link = await create_start_link(bot, str(callback.from_user.id))
             link_for_db = new_link[new_link.index("=") + 1:]
 
-            # Referral ID bor bo'lsa va o'zini o'zi refer qilmayotgan bo'lsa
             if referral_id and str(referral_id) != str(user_id):
-                # Referral bilan qo'shish
                 await add_user(
                     tg_id=callback.from_user.id,
                     user_name=callback.from_user.first_name,
@@ -1761,43 +1770,54 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
                     invited_id=referral_id,
                     bot_token=callback.bot.token
                 )
-                logger.info(f"New user {callback.from_user.id} added to database with referrer {referral_id}")
+                logger.info(f"New user {callback.from_user.id} added with referrer {referral_id}")
 
-                # Referral jarayonini ishga tushirish
-                success = await process_referral(callback.message, referral_id)
-                logger.info(f"Referral process result: {success}")
+                # ✅ TO'G'RI CHAQIRUV
+                success = await process_referral(
+                    inviter_id=referral_id,
+                    new_user_id=user_id,
+                    current_bot_token=bot.token
+                )
+                logger.info(f"New user referral result: {success}")
             else:
-                # Referralsiz qo'shish
                 await add_user(
                     tg_id=callback.from_user.id,
                     user_name=callback.from_user.first_name,
                     bot_token=callback.bot.token
                 )
-                logger.info(f"New user {callback.from_user.id} added to database without referrer")
+                logger.info(f"New user {callback.from_user.id} added without referrer")
         except Exception as e:
-            logger.error(f"Error processing user or referral: {e}")
+            logger.error(f"Error processing new user: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+
+    # Mavjud user
     else:
-        # Mavjud foydalanuvchi uchun ham referral operatsiyasini tekshirish
         if referral_id and str(referral_id) != str(user_id):
             try:
-                # Foydalanuvchi oldin shu referral ID ni ishlatganmi?
                 user_tg = await get_user_by_id(user_id)
-                if user_tg and user_tg.invited_id != referral_id:
-                    # Referral jarayonini ishga tushirish
-                    success = await process_referral(
-                        inviter_id=referral_id,  # Refer qilgan user
-                        new_user_id=user_id,  # Yangi user
-                        current_bot_token=bot.token  # Bot token
-                    )
-                    logger.info(f"Existing user, new referral process result: {success}")
-            except Exception as e:
-                logger.error(f"Error processing referral for existing user: {e}")
-        else:
-            logger.info(f"User {user_id} already exists, skipping referral")
 
-    # Bot moduliga qarab o'tish
+                if not user_tg:
+                    logger.warning(f"User {user_id} not found in database")
+                elif not hasattr(user_tg, 'invited_id'):
+                    logger.error(f"user_tg has no invited_id. Type: {type(user_tg)}")
+                elif user_tg.invited_id != referral_id:
+                    # ✅ TO'G'RI CHAQIRUV
+                    success = await process_referral(
+                        inviter_id=referral_id,
+                        new_user_id=user_id,
+                        current_bot_token=bot.token
+                    )
+                    logger.info(f"Existing user referral result: {success}")
+            except Exception as e:
+                logger.error(f"Error processing existing user referral: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+        else:
+            logger.info(f"User {user_id} exists, no referral needed")
+
+    # =================== BOT MODULE RESPONSE ===================
     if shortcuts.have_one_module(bot_db, "leo"):
-        # await callback.message.delete()
         builder = ReplyKeyboardBuilder()
         builder.button(text="🫰 Знакомства")
         builder.button(text="💸Заработать")
@@ -1835,18 +1855,20 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
     else:
         await callback.message.delete()
 
-        # Qo'shimcha referral operatsiyalari - Dobro pojalovatdan oldin
         data = await state.get_data()
         referral = data.get('referral')
-        if referral and referral.isdigit():
+        if referral and str(referral).isdigit():
             try:
                 referral_id = int(referral)
                 if str(referral_id) != str(user_id):
-                    await process_referral(callback.message, referral_id)
-            except ValueError:
-                logger.error(f"Invalid referral ID at final check: {referral}")
+                    # ✅ TO'G'RI CHAQIRUV
+                    await process_referral(
+                        inviter_id=referral_id,
+                        new_user_id=user_id,
+                        current_bot_token=bot.token
+                    )
             except Exception as e:
-                logger.error(f"Error processing referral at final check: {e}")
+                logger.error(f"Error in final referral check: {e}")
 
         text = "Добро пожаловать, {hello}".format(
             hello=html.quote(callback.from_user.full_name))
