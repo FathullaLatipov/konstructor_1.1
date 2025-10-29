@@ -91,33 +91,3 @@ async def bot_start_lets_leo(message: types.Message, state: FSMContext):
     pass
 
 
-@client_bot_router.callback_query(F.data == "check_chan", AnonBotFilter())
-async def check_channels_callback(callback: CallbackQuery, state: FSMContext, bot: Bot):
-    user_id = callback.from_user.id
-    state_data = await state.get_data()
-    print(state_data)
-    referrer_args = state_data.get('referral_uid') or state_data.get('referral')
-
-    print(f"DEBUG: user_id={user_id}, referrer_args='{referrer_args}'")
-
-    channels = await get_channels_with_type_for_check()
-    subscribed_all = True
-    invalid_channels_to_remove = []
-
-    for channel_id, channel_url, channel_type in channels:
-        try:
-            if channel_type == 'system':
-                from modul.loader import main_bot
-                member = await main_bot.get_chat_member(chat_id=int(channel_id), user_id=user_id)
-            else:
-                member = await bot.get_chat_member(chat_id=int(channel_id), user_id=user_id)
-
-            if member.status in ['left', 'kicked']:
-                subscribed_all = False
-                break
-        except Exception as e:
-            logger.error(f"Error checking channel {channel_id} (type: {channel_type}): {e}")
-            if channel_type == 'sponsor':
-                invalid_channels_to_remove.append(channel_id)
-            subscribed_all = False
-            break
