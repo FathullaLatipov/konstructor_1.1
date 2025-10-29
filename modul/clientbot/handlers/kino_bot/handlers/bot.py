@@ -1690,7 +1690,11 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
                 user_tg = await get_user_by_id(user_id)
                 if user_tg and user_tg.invited_id != referral_id:
                     # Referral jarayonini ishga tushirish
-                    success = await process_referral(callback.message, referral_id)
+                    success = await process_referral(
+                        inviter_id=referral_id,  # Refer qilgan user
+                        new_user_id=user_id,  # Yangi user
+                        current_bot_token=bot.token  # Bot token
+                    )
                     logger.info(f"Existing user, new referral process result: {success}")
             except Exception as e:
                 logger.error(f"Error processing referral for existing user: {e}")
