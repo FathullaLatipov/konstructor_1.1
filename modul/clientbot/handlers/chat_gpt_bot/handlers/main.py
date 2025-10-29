@@ -946,18 +946,13 @@ async def gain(message: Message, bot: Bot, state: FSMContext):
 
 @client_bot_router.callback_query(F.data == "show_balance")
 async def show_balance_callback(callback: types.CallbackQuery):
-    """Balansni ko'rsatish - faqat Stars"""
     user_id = callback.from_user.id
-
     bot_db_id = await get_chatgpt_bot_db_id(callback.bot.token)
-
     if not bot_db_id:
         await callback.answer("❌ Ошибка: бот не найден в базе данных", show_alert=True)
         return
-
     try:
         user_balance = await get_user_balance_db(user_id, bot_db_id)
-
         await callback.message.edit_text(
             f"💰 <b>Ваш баланс:</b> {user_balance:.0f} ⭐️\n\n"
             f"📊 <b>Тарифы:</b>\n"
@@ -975,7 +970,6 @@ async def show_balance_callback(callback: types.CallbackQuery):
             "Ошибка при получении баланса",
             reply_markup=bt.back()
         )
-
     await callback.answer()
 
 

@@ -46,21 +46,16 @@ async def handle_refuse_registration_callback(callback: types.CallbackQuery, sta
 @client_bot_router.message(F.text == "🫰 Знакомства")
 async def bot_start(message: types.Message, state: FSMContext):
     print(f"DEBUG: bot_start called for user {message.from_user.id}")
-
-    # Leo profil mavjudligini tekshiramiz (bu avtomatik bog'lash ham qiladi)
     has_leo = await exists_leo(message.from_user.id)
     print(f"DEBUG: Leo exists: {has_leo}")
 
     if has_leo:
-        # Leo profil mavjud
         leo = await get_leo(message.from_user.id)
         if leo and leo.blocked:
             await message.answer("Ваш аккаунт заблокирован")
             return
-        # Asosiy menyuga o'tish
         await manage(message, state)
     else:
-        # Leo profil yo'q - registratsiyaga
         print(f"DEBUG: No Leo profile, starting registration")
         await message.answer(
             "Добро пожаловать! Я - бот для знакомств. Я помогу тебе найти свою вторую половинку.",
@@ -94,3 +89,35 @@ async def bot_start_lets_leo(message: types.Message, state: FSMContext):
         await message.answer(
             ("Настоятельно рекомендуем указать username или в настройках разрешение на пересылку сообщения иначе Вам не смогут написать те, кого вы лайкните"))
     pass
+
+
+@client_bot_router.callback_query(F.data == "check_chan", AnonBotFilter())
+async def check_channels_callback(callback: CallbackQuery, state: FSMContext, bot: Bot):
+    user_id = callback.from_user.id
+    state_data = await state.get_data()
+    print(state_data)
+    referrer_args = state_data.get('referral_uid') or state_data.get('referral')
+
+    print(f"DEBUG: user_id={user_id}, referrer_args='{referrer_args}'")
+
+    channels = await get_channels_with_type_for_check()
+    subscribed_all = True
+    invalid_channels_to_remove = []
+
+    for channel_id, channel_url, channel_type in channels:
+        try:
+            if channel_type == 'system':
+                from modul.loader import main_bot
+                member = await main_bot.get_chat_member(chat_id=int(channel_id), user_id=user_id)
+            else:
+                member = await bot.get_chat_member(chat_id=int(channel_id), user_id=user_id)
+
+            if member.status in ['left', 'kicked']:
+                subscribed_all = False
+                break
+        except Exception as e:
+            logger.error(f"Error checking channel {channel_id} (type: {channel_type}): {e}")
+            if channel_type == 'sponsor':
+                invalid_channels_to_remove.append(channel_id)
+            subscribed_all = False
+            break

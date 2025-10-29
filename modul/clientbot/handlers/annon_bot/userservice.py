@@ -111,7 +111,7 @@ def get_user_by_link(link_or_id):
 @sync_to_async
 def get_user_by_id(uid):
     user = UserTG.objects.filter(uid=uid).first()
-    return user.uid if user else False
+    return user  # ✅ To'g'ri - butun object qaytarish
 
 @sync_to_async
 def add_messages_info(sender_id, receiver_id, sender_message_id, receiver_message_id):
