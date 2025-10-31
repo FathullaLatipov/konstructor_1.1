@@ -1720,8 +1720,9 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
         return
 
     await callback.message.edit_text(
-        'Вы успешно подписались',
-        reply_markup=ReplyKeyboardRemove())
+        "Вы успешно подписались",
+        reply_markup=None)
+
     await callback.answer("Вы успешно подписались на все каналы!")
 
     # =================== USER PROCESSING ===================
