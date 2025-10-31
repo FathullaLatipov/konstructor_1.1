@@ -1719,7 +1719,9 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
             )
         return
 
-    await callback.message.delete()
+    await callback.message.edit_text(
+        'Вы успешно подписались',
+        reply_markup=ReplyKeyboardRemove())
     await callback.answer("Вы успешно подписались на все каналы!")
 
     # =================== USER PROCESSING ===================
