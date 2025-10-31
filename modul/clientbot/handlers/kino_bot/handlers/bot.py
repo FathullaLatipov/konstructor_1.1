@@ -213,22 +213,6 @@ def remove_sponsor_channel(channel_id):
         logger.error(f"Error removing sponsor channel {channel_id}: {e}")
 
 
-# @sync_to_async
-# def remove_invalid_channel(channel_id):
-#     try:
-#         sponsor_deleted = ChannelSponsor.objects.filter(chanel_id=channel_id).delete()
-#         if sponsor_deleted[0] > 0:
-#             logger.info(f"Removed invalid sponsor channel {channel_id} from database")
-#             return
-#         system_updated = SystemChannel.objects.filter(channel_id=channel_id).update(is_active=False)
-#         if system_updated > 0:
-#             logger.warning(f"Deactivated invalid system channel {channel_id}")
-#         else:
-#             logger.warning(f"Channel {channel_id} not found in database")
-#
-#     except Exception as e:
-#         logger.error(f"Error handling invalid channel {channel_id}: {e}")
-
 async def get_subs_kb(bot: Bot) -> types.InlineKeyboardMarkup:
     channels = await get_all_channels_sponsors()
     kb = InlineKeyboardBuilder()
@@ -270,11 +254,6 @@ async def notify_system_channel_errors(bot, user_id: int, errors: list):
             error_message += f"• <b>{channel_name}</b>\n"
             error_message += f"  <i>error: {error}</i>\n\n"
         error_message += "📞 <b>Произошла ошибка, обратитесь к администратору.</b>"
-        # await bot.send_message(
-        #     chat_id=user_id,
-        #     text=error_message,
-        #     parse_mode="HTML"
-        # )
         logger.info(f"Notified user {user_id} about system channel errors")
     except Exception as e:
         logger.error(f"Error notifying user about system channel errors: {e}")
@@ -944,6 +923,7 @@ async def change_refs_handler(call: CallbackQuery, state: FSMContext):
     )
     await state.set_state(ChangeAdminInfo.change_refs)
     await state.update_data(user_id=user_id)
+
 @client_bot_router.message(ChangeAdminInfo.change_refs)
 async def set_new_refs_count(message: Message, state: FSMContext):
     data = await state.get_data()
@@ -1082,9 +1062,6 @@ async def get_new_min_handler(message: Message, state: FSMContext, bot: Bot):
 
     try:
         new_min_payout = float(message.text)
-
-        # Hech qanday cheklov yo'q - 0 va barcha musbat qiymatlar qabul qilinadi
-
         logger.info(f"Yangi min_amount: {new_min_payout}")
 
         success = await change_min_amount(new_min_payout, bot_token=bot.token)
@@ -1641,7 +1618,6 @@ async def process_referral(inviter_id: int, new_user_id: int, current_bot_token:
                 logger.info(f"Notification sent to inviter {inviter_id}")
         except Exception as e:
             logger.error(f"Error sending notification to {inviter_id}: {e}")
-            # Bildirishnoma yuborilmasa ham, referral muvaffaqiyatli hisoblanadi
 
         return True
 
@@ -1743,6 +1719,7 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
             )
         return
 
+    await callback.message.delete()
     await callback.answer("Вы успешно подписались на все каналы!")
 
     # =================== USER PROCESSING ===================
