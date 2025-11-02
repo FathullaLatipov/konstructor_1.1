@@ -292,6 +292,9 @@ async def process_token(message: Message, state: FSMContext):
         # Получаем выбранный модуль из state
         data = await state.get_data()
         selected_module = data.get('selected_module')
+        print(selected_module)
+        if selected_module is None:
+            await loading_msg.edit_text('modul muamosi')
 
         if not selected_module:
             await loading_msg.edit_text(
