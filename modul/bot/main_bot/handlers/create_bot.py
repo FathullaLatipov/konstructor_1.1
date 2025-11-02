@@ -225,6 +225,7 @@ async def start_create_with_module(callback: CallbackQuery, state: FSMContext):
 
 @create_bot_router.message(StateFilter(CreateBotStates.waiting_for_token))
 async def process_token(message: Message, state: FSMContext):
+    print('ishladi 228')
     """Обработка введенного токена"""
     token = message.text.strip()
 
