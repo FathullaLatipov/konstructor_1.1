@@ -1683,64 +1683,101 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
     subscribed = True
     not_subscribed_channels = []
 
-    # ✅ TO'G'RILANGAN: Kanal turini ham olish
+    # Kanal id, url, type ('system' | 'sponsor') bilan qaytadi
     channels_with_type = await get_channels_with_type_for_check()
 
     if channels_with_type:
         for channel_id, channel_url, channel_type in channels_with_type:
             try:
-                # ✅ System kanallarni main_bot orqali tekshirish
+                channel_id_int = int(channel_id)
+
+                # System kanallarni main_bot orqali tekshirish
                 if channel_type == 'system':
-                    member = await main_bot.get_chat_member(chat_id=int(channel_id), user_id=user_id)
-                    logger.info(f"System channel {channel_id} checked via main_bot: {member.status}")
+                    member = await main_bot.get_chat_member(
+                        chat_id=channel_id_int,
+                        user_id=user_id
+                    )
+                    logger.info(
+                        f"System channel {channel_id} checked via main_bot: {member.status}"
+                    )
                 else:
                     # Sponsor kanallarni joriy bot orqali tekshirish
-                    member = await bot.get_chat_member(chat_id=int(channel_id), user_id=user_id)
+                    member = await bot.get_chat_member(
+                        chat_id=channel_id_int,
+                        user_id=user_id
+                    )
 
                 print(f"Channel {channel_id} (type: {channel_type}) status: {member.status}")
 
                 if member.status in ["left", "kicked"]:
                     subscribed = False
                     try:
-                        # System kanallar uchun main_bot, sponsor uchun joriy bot
                         check_bot = main_bot if channel_type == 'system' else bot
-                        chat_info = await check_bot.get_chat(chat_id=int(channel_id))
-                        not_subscribed_channels.append({
-                            'id': channel_id,
-                            'title': chat_info.title,
-                            'invite_link': channel_url or chat_info.invite_link or f"https://t.me/{channel_id.strip('-')}",
-                            'type': channel_type
-                        })
+                        chat_info = await check_bot.get_chat(chat_id=channel_id_int)
+                        title = chat_info.title or "Канал"
+                        invite_link = (
+                            channel_url
+                            or getattr(chat_info, "invite_link", None)
+                            or (
+                                f"https://t.me/{chat_info.username}"
+                                if getattr(chat_info, "username", None)
+                                else f"https://t.me/{str(channel_id).replace('-100', '')}"
+                            )
+                        )
                     except Exception as e:
                         print(f"⚠️ Error getting chat info for channel {channel_id}: {e}")
-                        not_subscribed_channels.append({
-                            'id': channel_id,
-                            'title': f"Канал {channel_id}",
-                            'invite_link': channel_url or f"https://t.me/{channel_id.strip('-')}",
-                            'type': channel_type
-                        })
+                        title = "Канал"
+                        invite_link = channel_url or f"https://t.me/{str(channel_id).replace('-100', '')}"
+
+                    not_subscribed_channels.append({
+                        'id': channel_id,
+                        'title': title,
+                        'invite_link': invite_link,
+                        'type': channel_type
+                    })
+
             except Exception as e:
                 logger.error(f"Error checking channel {channel_id} (type: {channel_type}): {e}")
 
-                # ✅ Faqat sponsor kanallarni o'chirish
+                # ❗ Har qanday xatoda ham bu kanalni "obuna emas" deb hisoblaymiz
+                subscribed = False
+                title = "Канал"
+                invite_link = channel_url or f"https://t.me/{str(channel_id).replace('-100', '')}"
+
+                not_subscribed_channels.append({
+                    'id': channel_id,
+                    'title': title,
+                    'invite_link': invite_link,
+                    'type': channel_type
+                })
+
+                # Sponsor kanal butunlay invalid bo'lsa, DBdan tozalash mumkin
                 if channel_type == 'sponsor':
-                    await remove_sponsor_channel(channel_id)
-                    logger.info(f"Removed invalid sponsor channel {channel_id}")
+                    try:
+                        await remove_sponsor_channel(channel_id)
+                        logger.info(f"Removed invalid sponsor channel {channel_id}")
+                    except Exception as ex:
+                        logger.error(f"Error removing sponsor channel {channel_id}: {ex}")
                 else:
-                    # System kanallar uchun faqat log
-                    logger.warning(f"System channel {channel_id} access error (ignoring): {e}")
+                    logger.warning(
+                        f"System channel {channel_id} access error, treating as NOT SUBSCRIBED: {e}"
+                    )
 
                 continue
 
+    # ❌ Hali hamma kanallarga obuna bo'lmagan
     if not subscribed:
-        await callback.answer("⚠️ Вы не подписались на все каналы! Пожалуйста, подпишитесь на все указанные каналы.",
-                              show_alert=True)
+        await callback.answer(
+            "⚠️ Вы не подписались на все каналы! Пожалуйста, подпишитесь на все указанные каналы.",
+            show_alert=True
+        )
 
-        channels_text = f"📢 **Для использования бота необходимо подписаться на каналы:**\n\n"
+        # HTML bo'lgani uchun <b> ishlatamiz, ** emas
+        channels_text = "📢 <b>Для использования бота необходимо подписаться на каналы:</b>\n\n"
         markup = InlineKeyboardBuilder()
 
         for index, channel in enumerate(not_subscribed_channels):
-            title = channel['title']
+            title = channel['title'] or "Канал"
             invite_link = channel['invite_link']
             channels_text += f"{index + 1}. {title}\n"
             markup.button(text=f"📢 {title}", url=invite_link)
@@ -1750,29 +1787,30 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
 
         try:
             await callback.message.edit_text(
-                channels_text + f"\n\nПосле подписки на все каналы нажмите кнопку «Проверить подписку».",
+                channels_text + "\n\nПосле подписки на все каналы нажмите кнопку «Проверить подписку».",
                 reply_markup=markup.as_markup(),
                 parse_mode="HTML"
             )
-        except Exception as e:
+        except Exception:
             try:
                 await callback.message.delete()
             except:
                 pass
             await callback.message.answer(
-                channels_text + f"\n\nПосле подписки на все каналы нажмите кнопку «Проверить подписку».",
+                channels_text + "\n\nПосле подписки на все каналы нажмите кнопку «Проверить подписку».",
                 reply_markup=markup.as_markup(),
                 parse_mode="HTML"
             )
         return
 
+    # ✅ Hamma kanallarga obuna
     await callback.message.edit_text(
         "Вы успешно подписались",
-        reply_markup=None)
-
+        reply_markup=None
+    )
     await callback.answer("Вы успешно подписались на все каналы!")
 
-    # =================== USER PROCESSING ===================
+    # =================== USER / REFERRAL PROCESSING ===================
     user_exists = await check_user(user_id)
 
     # State'dan referral ID olish
@@ -1783,13 +1821,14 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
         referral_id = int(referral)
         logger.info(f"Got referral ID from state: {referral_id}")
 
-    # Yangi user
+    # --- YANGI USER ---
     if not user_exists:
         try:
+            # Agar kerak bo'lsa, start-link yaratish
             new_link = await create_start_link(bot, str(callback.from_user.id))
-            link_for_db = new_link[new_link.index("=") + 1:]
+            link_for_db = new_link[new_link.index("=") + 1:]  # agar kerak bo'lsa ishlatasan
 
-            if referral_id and str(referral_id) != str(user_id):
+            if referral_id and referral_id != user_id:
                 await add_user(
                     tg_id=callback.from_user.id,
                     user_name=callback.from_user.first_name,
@@ -1799,13 +1838,26 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
                 )
                 logger.info(f"New user {callback.from_user.id} added with referrer {referral_id}")
 
-                # ✅ TO'G'RI CHAQIRUV
+                # Referral bonusni hisoblash
                 success = await process_referral(
                     inviter_id=referral_id,
                     new_user_id=user_id,
                     current_bot_token=bot.token
                 )
                 logger.info(f"New user referral result: {success}")
+
+                if success:
+                    # Refererga habar yuborish
+                    try:
+                        user_name = html.quote(callback.from_user.first_name or "")
+                        profile_link = f"tg://user?id={user_id}"
+                        await bot.send_message(
+                            chat_id=referral_id,
+                            text=f"У вас новый реферал! <a href='{profile_link}'>{user_name}</a>",
+                            parse_mode="HTML"
+                        )
+                    except Exception as e:
+                        logger.error(f"Error sending referral notification to {referral_id}: {e}")
             else:
                 await add_user(
                     tg_id=callback.from_user.id,
@@ -1818,9 +1870,9 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
             import traceback
             logger.error(traceback.format_exc())
 
-    # Mavjud user
+    # --- MAVJUD USER ---
     else:
-        if referral_id and str(referral_id) != str(user_id):
+        if referral_id and referral_id != user_id:
             try:
                 user_tg = await get_user_by_id(user_id)
 
@@ -1829,13 +1881,24 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
                 elif not hasattr(user_tg, 'invited_id'):
                     logger.error(f"user_tg has no invited_id. Type: {type(user_tg)}")
                 elif user_tg.invited_id != referral_id:
-                    # ✅ TO'G'RI CHAQIRUV
                     success = await process_referral(
                         inviter_id=referral_id,
                         new_user_id=user_id,
                         current_bot_token=bot.token
                     )
                     logger.info(f"Existing user referral result: {success}")
+
+                    if success:
+                        try:
+                            user_name = html.quote(callback.from_user.first_name or "")
+                            profile_link = f"tg://user?id={user_id}"
+                            await bot.send_message(
+                                chat_id=referral_id,
+                                text=f"У вас новый реферал! <a href='{profile_link}'>{user_name}</a>",
+                                parse_mode="HTML"
+                            )
+                        except Exception as e:
+                            logger.error(f"Error sending referral notification to {referral_id}: {e}")
             except Exception as e:
                 logger.error(f"Error processing existing user referral: {e}")
                 import traceback
@@ -1857,12 +1920,18 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
     elif shortcuts.have_one_module(bot_db, "download"):
         builder = ReplyKeyboardBuilder()
         builder.button(text='💸Заработать')
-        text = ("🤖 Привет, {full_name}! Я бот-загрузчик.\r\n\r\n"
-                "Я могу скачать фото/видео/аудио/файлы/архивы с *Youtube, Instagram, TikTok, Facebook, SoundCloud, Vimeo, Вконтакте, Twitter и 1000+ аудио/видео/файловых хостингов*. Просто пришли мне URL на публикацию с медиа или прямую ссылку на файл.").format(
-            full_name=callback.from_user.full_name)
+        text = (
+            "🤖 Привет, {full_name}! Я бот-загрузчик.\r\n\r\n"
+            "Я могу скачать фото/видео/аудио/файлы/архивы с *Youtube, Instagram, TikTok, Facebook, "
+            "SoundCloud, Vimeo, Вконтакте, Twitter и 1000+ аудио/видео/файловых хостингов*. "
+            "Просто пришли мне URL на публикацию с медиа или прямую ссылку на файл."
+        ).format(full_name=callback.from_user.full_name)
         await state.set_state(Download.download)
-        await callback.message.answer(text, parse_mode="Markdown",
-                                      reply_markup=builder.as_markup(resize_keyboard=True))
+        await callback.message.answer(
+            text,
+            parse_mode="Markdown",
+            reply_markup=builder.as_markup(resize_keyboard=True)
+        )
 
     elif shortcuts.have_one_module(bot_db, "kino"):
         await callback.message.delete()
@@ -1882,13 +1951,13 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
     else:
         await callback.message.delete()
 
+        # Yakuniy fallback referral check (agar modul jangida o'tkazib yuborilgan bo'lsa)
         data = await state.get_data()
         referral = data.get('referral')
         if referral and str(referral).isdigit():
             try:
                 referral_id = int(referral)
-                if str(referral_id) != str(user_id):
-                    # ✅ TO'G'RI CHAQIRUV
+                if referral_id != user_id:
                     await process_referral(
                         inviter_id=referral_id,
                         new_user_id=user_id,
@@ -1898,9 +1967,13 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
                 logger.error(f"Error in final referral check: {e}")
 
         text = "Добро пожаловать, {hello}".format(
-            hello=html.quote(callback.from_user.full_name))
-        await callback.message.answer(text,
-                                      reply_markup=await reply_kb.main_menu(user_id, bot))
+            hello=html.quote(callback.from_user.full_name)
+        )
+        await callback.message.answer(
+            text,
+            reply_markup=await reply_kb.main_menu(user_id, bot)
+        )
+
 
 @sync_to_async
 def get_user_balance_db(user_id: int, bot_id: int):
