@@ -2186,9 +2186,11 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
         print(f"Full start message: {message.text}")
         logger.info(f"Start command received from user {message.from_user.id}")
 
+        # --- REFERRAL PARSING ---
         referral = command.args if command and command.args else None
         print(f"Extracted referral from command.args: {referral}")
 
+        # /start 12345 ko'rinishida bo'lsa, textdan ham referral ajratamiz
         if not referral and message.text and len(message.text) > 7:
             text_referral = message.text[7:]
             if text_referral.isdigit():
@@ -2199,64 +2201,101 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
             await state.update_data(referral=referral, referrer_id=referral)
             print(f"Saved referral to state with both keys: {referral}")
 
-        # O'ZGARISH: get_channels_with_type_for_check() ishlatish
+        # --- MAJBURIY KANALLARNI OLISH ---
         channels = await get_channels_with_type_for_check()
         print(f"📡 Found channels: {channels}")
 
         if channels:
             print(f"🔒 Channels exist, checking user subscription for {message.from_user.id}")
-            not_subscribed_channels = []
+            not_subscribed_channels: list[dict] = []
 
-            # O'ZGARISH: channel_type ham olish
             for channel_id, channel_url, channel_type in channels:
                 try:
-                    # O'ZGARISH: channel type ga qarab bot tanlash
+                    channel_id_int = int(channel_id)
+
+                    # System kanallarni main_bot orqali tekshiramiz
                     if channel_type == 'system':
                         from modul.loader import main_bot
                         member = await main_bot.get_chat_member(
-                            chat_id=int(channel_id),
+                            chat_id=channel_id_int,
                             user_id=message.from_user.id
                         )
                         print(f"System channel {channel_id} checked via main_bot: {member.status}")
                     else:
+                        # Sponsor kanallarni joriy client-bot orqali tekshiramiz
                         member = await message.bot.get_chat_member(
-                            chat_id=int(channel_id),
+                            chat_id=channel_id_int,
                             user_id=message.from_user.id
                         )
                         print(f"Sponsor channel {channel_id} checked via current_bot: {member.status}")
 
-                    if member.status == "left":
+                    # A'zo bo'lmagan holatlar
+                    if member.status in ("left", "kicked"):
                         try:
-                            # Chat info ni ham to'g'ri bot orqali olish
+                            # Kanal nomini olish
                             if channel_type == 'system':
-                                chat_info = await main_bot.get_chat(chat_id=int(channel_id))
+                                from modul.loader import main_bot
+                                chat_info = await main_bot.get_chat(chat_id=channel_id_int)
                             else:
-                                chat_info = await message.bot.get_chat(chat_id=int(channel_id))
+                                chat_info = await message.bot.get_chat(chat_id=channel_id_int)
+
+                            title = chat_info.title or "Канал"
+
+                            # Invite link: DB dagi url > invite_link > username > fallback
+                            invite_link = (
+                                channel_url
+                                or getattr(chat_info, "invite_link", None)
+                                or (
+                                    f"https://t.me/{chat_info.username}"
+                                    if getattr(chat_info, "username", None)
+                                    else f"https://t.me/{str(channel_id).replace('-100', '')}"
+                                )
+                            )
 
                             not_subscribed_channels.append({
-                                'id': channel_id,
-                                'title': chat_info.title,
-                                'invite_link': channel_url or chat_info.invite_link or f"https://t.me/{channel_id.strip('-')}"
+                                "id": channel_id,
+                                "title": title,
+                                "invite_link": invite_link
                             })
                         except Exception as e:
                             print(f"⚠️ Error getting chat info for channel {channel_id}: {e}")
+                            # Title-ni ololmasak ham "Канал" deb yozamiz
                             not_subscribed_channels.append({
-                                'id': channel_id,
-                                'title': f"Канал {channel_id}",
-                                'invite_link': channel_url or f"https://t.me/{channel_id.strip('-')}"
+                                "id": channel_id,
+                                "title": "Канал",
+                                "invite_link": channel_url or f"https://t.me/{str(channel_id).replace('-100', '')}"
                             })
+
                 except Exception as e:
                     logger.error(f"Error checking channel {channel_id} (type: {channel_type}): {e}")
 
-                    # O'ZGARISH: faqat sponsor kanallarni o'chirish
+                    # ❗ Har qanday xatoda bu kanalni ham OBUNA EMAS deb hisoblaymiz
+                    # Title: "Канал"
+                    title = "Канал"
+                    invite_link = channel_url or f"https://t.me/{str(channel_id).replace('-100', '')}"
+
+                    not_subscribed_channels.append({
+                        "id": channel_id,
+                        "title": title,
+                        "invite_link": invite_link
+                    })
+
+                    # Sponsor kanal butunlay invalid bo'lsa, DBdan tozalashga harakat qilamiz
                     if channel_type == 'sponsor':
-                        await remove_sponsor_channel(channel_id)
-                        logger.info(f"Removed invalid sponsor channel {channel_id}")
+                        try:
+                            await remove_sponsor_channel(channel_id)
+                            logger.info(f"Removed invalid sponsor channel {channel_id}")
+                        except Exception as ex:
+                            logger.error(f"Error removing sponsor channel {channel_id}: {ex}")
                     else:
-                        # System kanallar uchun faqat log
-                        logger.warning(f"System channel {channel_id} error (ignoring): {e}")
+                        # Avvalgi "ignoring" o‘rniga endi OBUNA EMAS sifatida ko‘ryapmiz
+                        logger.warning(
+                            f"System channel {channel_id} access error, treating as NOT SUBSCRIBED: {e}"
+                        )
+
                     continue
 
+            # --- AGAR HAMMA KANALLARGA OBUNA BO'LGAN BO'LSA ---
             if not not_subscribed_channels:
                 print(f"✅ User {message.from_user.id} subscribed to all channels - proceeding with registration")
                 current_user_id = message.from_user.id
@@ -2272,7 +2311,7 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
                     )
                     print(f"➕ Added user {current_user_id} to database (all channels subscribed), result: {new_user}")
 
-                    # REFERRAL JARAYONI
+                    # REFERRAL BONUS
                     if new_user and referral and referral.isdigit():
                         ref_id = int(referral)
                         if ref_id != current_user_id:
@@ -2281,14 +2320,16 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
                             if success:
                                 try:
                                     user_name = html.escape(message.from_user.first_name)
-                                    user_profile_link = f'tg://user?id={current_user_id}'
+                                    user_profile_link = f"tg://user?id={current_user_id}"
 
                                     await asyncio.sleep(1)
 
                                     await bot.send_message(
                                         chat_id=ref_id,
-                                        text=f"У вас новый реферал! <a href='{user_profile_link}'>{user_name}</a>\n"
-                                             f"💰 Получено: {reward}₽",
+                                        text=(
+                                            f"У вас новый реферал! <a href='{user_profile_link}'>{user_name}</a>\n"
+                                            f"💰 Получено: {reward}₽"
+                                        ),
                                         parse_mode="HTML"
                                     )
                                     print(f"📨 Sent referral notification to {ref_id} about user {current_user_id}")
@@ -2297,21 +2338,24 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
                 else:
                     print(f"ℹ️ User {current_user_id} already registered in this bot")
 
+                # Asosiy meni / start logikasiga o'tamiz
                 await start(message, state, bot)
                 return
 
+            # --- OBUNA BO'LMAGAN KANALLAR BOR ---
             print(f"🚫 User {message.from_user.id} not subscribed to all channels")
 
             channels_text = "📢 <b>Для использования бота необходимо подписаться на каналы:</b>\n\n"
             kb = InlineKeyboardBuilder()
 
             for index, channel in enumerate(not_subscribed_channels):
-                title = channel['title']
-                invite_link = channel['invite_link']
+                title = channel["title"] or "Канал"
+                invite_link = channel["invite_link"]
 
                 channels_text += f"{index + 1}. {title}\n"
                 kb.button(text=f"📢 {title}", url=invite_link)
 
+            # Handler logingda `check_chan callback` kutyapsan, shuning uchun shu yerda shuni qo'yamiz
             kb.button(text="✅ Проверить подписку", callback_data="check_chan")
             kb.adjust(1)
 
@@ -2323,9 +2367,9 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
 
             print(f"📝 State saved for user {message.from_user.id}: referral data will be processed after channel check")
             print(f"🚫 NOT adding user to database - waiting for check_chan callback")
-            return  # FAQAT OBUNA BO'LMAGAN KANALLARNI KO'RSATISH
+            return  # Faqat obuna bo'lmagan kanallarni ko'rsatib, keyin callbackni kutamiz
 
-        # Qolgan kod o'zgarmaydi...
+        # --- AGAR UMUMAN KANALLAR YO'Q BO'LSA (majburiy obuna o'chirilgan holat) ---
         print(f"ℹ️ No channels found, proceeding with normal registration for {message.from_user.id}")
 
         current_user_id = message.from_user.id
@@ -2349,14 +2393,16 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
                     if success:
                         try:
                             user_name = html.escape(message.from_user.first_name)
-                            user_profile_link = f'tg://user?id={current_user_id}'
+                            user_profile_link = f"tg://user?id={current_user_id}"
 
                             await asyncio.sleep(1)
 
                             await bot.send_message(
                                 chat_id=ref_id,
-                                text=f"У вас новый реферал! <a href='{user_profile_link}'>{user_name}</a>\n"
-                                     f"💰 Получено: {reward}₽",
+                                text=(
+                                    f"У вас новый реферал! <a href='{user_profile_link}'>{user_name}</a>\n"
+                                    f"💰 Получено: {reward}₽"
+                                ),
                                 parse_mode="HTML"
                             )
                             print(f"📨 Sent referral notification to {ref_id} about user {current_user_id}")
@@ -2371,6 +2417,7 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
         logger.error(f"Error in start handler: {e}")
         traceback.print_exc()
         await message.answer("Произошла ошибка при запуске. Пожалуйста, попробуйте позже.")
+
 
 
 @client_bot_router.callback_query(F.data == 'start_search')
