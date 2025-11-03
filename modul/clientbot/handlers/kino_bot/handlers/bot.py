@@ -255,27 +255,53 @@ def remove_sponsor_channel(channel_id):
         logger.error(f"Error removing sponsor channel {channel_id}: {e}")
 
 
-async def get_subs_kb(bot: Bot) -> types.InlineKeyboardMarkup:
-    channels = await get_all_channels_sponsors()
+async def get_subs_kb(bot: types.Bot) -> types.InlineKeyboardMarkup:
+    """
+    Majburiy obuna uchun klaviatura:
+    - system va sponsor kanallarni ko‘rsatadi
+    - kanal nomi chiqadi, agar bo‘lmasa "Канал" deb yoziladi
+    """
+    channels_with_type = await get_channels_with_type_for_check()
     kb = InlineKeyboardBuilder()
 
-    for channel_id in channels:
+    for channel_id, channel_url, channel_type in channels_with_type:
         try:
-            chat_info = await bot.get_chat(channel_id)
-            invite_link = chat_info.invite_link
-            if not invite_link:
-                invite_link = (await bot.create_chat_invite_link(channel_id)).invite_link
+            channel_id = int(channel_id)
+            chat_bot = main_bot if channel_type == "system" else bot
+            title = None
+            url = channel_url
 
-            kb.button(text=f'{chat_info.title}', url=invite_link)
+            try:
+                # Kanal ma'lumotini olish
+                chat = await chat_bot.get_chat(channel_id)
+                title = chat.title or "Канал"
+
+                # URL topish
+                if getattr(chat, "invite_link", None):
+                    url = chat.invite_link
+                elif getattr(chat, "username", None):
+                    url = f"https://t.me/{chat.username}"
+                elif not url:
+                    invite = await chat_bot.create_chat_invite_link(channel_id)
+                    url = invite.invite_link
+
+            except Exception as e:
+                logger.warning(f"Can't fetch info for {channel_id} ({channel_type}): {e}")
+                # Agar nomni ololmasak
+                title = "Канал"
+                # URL ham bo'lmasa — tashlab ketamiz
+                if not url:
+                    continue
+
+            # Tugma qo‘shamiz
+            kb.button(text=f"{title}", url=url)
+
         except Exception as e:
-            print(f"Error with channel {channel_id}: {e}")
+            logger.error(f"Error building button for {channel_id}: {e}")
             continue
 
-    kb.button(
-        text='✅ Проверить подписку',
-        callback_data='check_subs'
-    )
-
+    # Pastdagi "Проверить подписку" tugmasi
+    kb.button(text="✅ Проверить подписку", callback_data="check_subs")
     kb.adjust(1)
     return kb.as_markup()
 
