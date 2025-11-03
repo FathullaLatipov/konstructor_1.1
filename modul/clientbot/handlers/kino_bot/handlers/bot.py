@@ -152,10 +152,14 @@ def remove_sponsor_channel(channel_id):
         logger.error(f"Error removing sponsor channel {channel_id}: {e}")
 
 
+from aiogram.exceptions import TelegramBadRequest
+
 async def check_subs(user_id: int, bot: Bot) -> bool:
     try:
         bot_db = await shortcuts.get_bot(bot)
         admin_id = bot_db.owner.uid
+
+        # Bot egasi uchun tekshiruvni o'tkazib yuboramiz
         if user_id == admin_id:
             return True
 
@@ -167,12 +171,21 @@ async def check_subs(user_id: int, bot: Bot) -> bool:
             try:
                 # System kanallarni FAQAT main bot orqali tekshirish
                 if channel_type == 'system':
-                    member = await main_bot.get_chat_member(chat_id=int(channel_id), user_id=user_id)
-                    logger.info(f"System channel {channel_id} checked via main_bot: {member.status}")
+                    member = await main_bot.get_chat_member(
+                        chat_id=int(channel_id),
+                        user_id=user_id
+                    )
+                    logger.info(
+                        f"System channel {channel_id} checked via main_bot: {member.status}"
+                    )
                 else:
                     # Sponsor kanallarni joriy bot orqali tekshirish
-                    member = await bot.get_chat_member(chat_id=int(channel_id), user_id=user_id)
+                    member = await bot.get_chat_member(
+                        chat_id=int(channel_id),
+                        user_id=user_id
+                    )
 
+                # Agar kanalga a'zo bo'lmasa
                 if member.status in ['left', 'kicked']:
                     kb = await get_subs_kb(bot)
                     await bot.send_message(
@@ -183,25 +196,54 @@ async def check_subs(user_id: int, bot: Bot) -> bool:
                     )
                     return False
 
-            except Exception as e:
+            except TelegramBadRequest as e:
                 logger.error(f"Error checking channel {channel_id} (type: {channel_type}): {e}")
 
-                # Faqat sponsor kanallarni o'chirish
+                # ⚠️ MUHIM O'ZGARISH:
+                # Bu yerga kelsa, biz userni obuna emas deb hisoblaymiz
+                # va shu kanali bilan birga barcha majburiy kanallar keyboardini chiqaramiz
+
                 if channel_type == 'sponsor':
+                    # Sponsor kanal haqiqatan ham noto'g'ri bo'lsa – DBdan o'chiramiz
                     await remove_sponsor_channel(channel_id)
                     logger.info(f"Removed invalid sponsor channel {channel_id}")
                 else:
-                    # System kanallar uchun HECH NARSA QILMASLIK - faqat log
-                    logger.warning(f"System channel {channel_id} access error (ignoring): {e}")
-                    # Continue - bu kanalni e'tiborsiz qoldirib davom etamiz
+                    # System kanal — o'chirmaymiz, faqat log qilamiz
+                    logger.warning(
+                        f"System channel {channel_id} access error (treat as not subscribed): {e}"
+                    )
 
-                continue
+                kb = await get_subs_kb(bot)
+                await bot.send_message(
+                    chat_id=user_id,
+                    text="<b>Чтобы воспользоваться ботом, необходимо подписаться на каналы:</b>",
+                    reply_markup=kb,
+                    parse_mode="HTML"
+                )
+                return False
 
+            except Exception as e:
+                # Boshqa kutilmagan xatolar ham userni "obuna emas" deb ko'rsatgani ma'qul
+                logger.error(f"Unexpected error checking channel {channel_id} (type: {channel_type}): {e}")
+
+                kb = await get_subs_kb(bot)
+                await bot.send_message(
+                    chat_id=user_id,
+                    text="<b>Чтобы воспользоваться ботом, необходимо подписаться на каналы:</b>",
+                    reply_markup=kb,
+                    parse_mode="HTML"
+                )
+                return False
+
+        # Hamma kanal bo'yicha tekshiruvdan o'tdi
         return True
 
     except Exception as e:
         logger.error(f"General error in check_subs: {e}")
-        return True  # Xato bo'lsa ham davom etishga ruxsat berish
+        # Bu yerda ham xohlasang False qilish mumkin, lekin hozircha sening
+        # eski mantiqingni saqlab turdim:
+        return True
+
 
 
 @sync_to_async
