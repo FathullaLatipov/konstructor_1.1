@@ -2090,7 +2090,10 @@ async def start(message: Message, state: FSMContext, bot: Bot):
                 channels_checker = False
 
             if not channels_checker:
-                print(f"Channel check failed for user {uid}, but referrer_id saved in state")
+                await message.answer(
+                    f"🎉 Привет, {message.from_user.first_name}",
+                    reply_markup=await main_menu_bt()
+                )
                 return
 
         print(f"Channels check result for user {uid}: {channels_checker}")
