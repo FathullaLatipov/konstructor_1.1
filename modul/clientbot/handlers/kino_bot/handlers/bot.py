@@ -158,8 +158,6 @@ async def check_subs(user_id: int, bot: Bot) -> bool:
     try:
         bot_db = await shortcuts.get_bot(bot)
         admin_id = bot_db.owner.uid
-
-        # Bot egasi uchun tekshiruvni o'tkazib yuboramiz
         if user_id == admin_id:
             return True
 
@@ -169,23 +167,12 @@ async def check_subs(user_id: int, bot: Bot) -> bool:
 
         for channel_id, channel_url, channel_type in channels_with_type:
             try:
-                # System kanallarni FAQAT main bot orqali tekshirish
                 if channel_type == 'system':
-                    member = await main_bot.get_chat_member(
-                        chat_id=int(channel_id),
-                        user_id=user_id
-                    )
-                    logger.info(
-                        f"System channel {channel_id} checked via main_bot: {member.status}"
-                    )
+                    member = await main_bot.get_chat_member(chat_id=int(channel_id), user_id=user_id)
+                    logger.info(f"System channel {channel_id} checked via main_bot: {member.status}")
                 else:
-                    # Sponsor kanallarni joriy bot orqali tekshirish
-                    member = await bot.get_chat_member(
-                        chat_id=int(channel_id),
-                        user_id=user_id
-                    )
+                    member = await bot.get_chat_member(chat_id=int(channel_id), user_id=user_id)
 
-                # Agar kanalga a'zo bo'lmasa
                 if member.status in ['left', 'kicked']:
                     kb = await get_subs_kb(bot)
                     await bot.send_message(
@@ -199,18 +186,15 @@ async def check_subs(user_id: int, bot: Bot) -> bool:
             except TelegramBadRequest as e:
                 logger.error(f"Error checking channel {channel_id} (type: {channel_type}): {e}")
 
-                # ⚠️ MUHIM O'ZGARISH:
-                # Bu yerga kelsa, biz userni obuna emas deb hisoblaymiz
-                # va shu kanali bilan birga barcha majburiy kanallar keyboardini chiqaramiz
-
+                # ❗ MUHIM O'ZGARISH:
+                # System bo'ladimi, sponsor bo'ladimi — bu userni "obuna emas" deb ko'rsatamiz
                 if channel_type == 'sponsor':
-                    # Sponsor kanal haqiqatan ham noto'g'ri bo'lsa – DBdan o'chiramiz
+                    # sponsor kanal haqiqatan invalid bo'lsa — DBdan o'chiramiz
                     await remove_sponsor_channel(channel_id)
                     logger.info(f"Removed invalid sponsor channel {channel_id}")
                 else:
-                    # System kanal — o'chirmaymiz, faqat log qilamiz
                     logger.warning(
-                        f"System channel {channel_id} access error (treat as not subscribed): {e}"
+                        f"System channel {channel_id} access error, treating as NOT SUBSCRIBED: {e}"
                     )
 
                 kb = await get_subs_kb(bot)
@@ -223,9 +207,7 @@ async def check_subs(user_id: int, bot: Bot) -> bool:
                 return False
 
             except Exception as e:
-                # Boshqa kutilmagan xatolar ham userni "obuna emas" deb ko'rsatgani ma'qul
-                logger.error(f"Unexpected error checking channel {channel_id} (type: {channel_type}): {e}")
-
+                logger.error(f"Unexpected error in channel {channel_id} (type: {channel_type}): {e}")
                 kb = await get_subs_kb(bot)
                 await bot.send_message(
                     chat_id=user_id,
@@ -235,13 +217,10 @@ async def check_subs(user_id: int, bot: Bot) -> bool:
                 )
                 return False
 
-        # Hamma kanal bo'yicha tekshiruvdan o'tdi
         return True
 
     except Exception as e:
         logger.error(f"General error in check_subs: {e}")
-        # Bu yerda ham xohlasang False qilish mumkin, lekin hozircha sening
-        # eski mantiqingni saqlab turdim:
         return True
 
 
