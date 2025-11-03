@@ -255,7 +255,7 @@ def remove_sponsor_channel(channel_id):
         logger.error(f"Error removing sponsor channel {channel_id}: {e}")
 
 
-async def get_subs_kb(bot: types.Bot) -> types.InlineKeyboardMarkup:
+async def get_subs_kb(bot: Bot) -> types.InlineKeyboardMarkup:
     """
     Majburiy obuna uchun klaviatura:
     - system va sponsor kanallarni ko‘rsatadi
