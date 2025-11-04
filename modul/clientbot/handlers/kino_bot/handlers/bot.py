@@ -118,11 +118,14 @@ class KinoBotFilter(Filter):
         bot_db = await shortcuts.get_bot(bot)
         return shortcuts.have_one_module(bot_db, "kino")
 
+
 @sync_to_async
 def get_channels_with_type_for_check():
     try:
         sponsor_channels = ChannelSponsor.objects.all()
-        sponsor_list = [(str(c.chanel_id), '', 'sponsor') for c in sponsor_channels]
+        # ✅ URL ni database'dan olamiz
+        sponsor_list = [(str(c.chanel_id), c.url or '', 'sponsor') for c in sponsor_channels]
+
         system_channels = SystemChannel.objects.filter(is_active=True)
         system_list = [(str(c.channel_id), c.channel_url, 'system') for c in system_channels]
 
