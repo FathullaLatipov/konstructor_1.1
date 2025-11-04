@@ -1726,7 +1726,7 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
 
                 if member.status in ["left", "kicked"]:
                     subscribed = False
-                    title = "Канал"
+                    title = "Подписаться"
                     invite_link = None
 
                     try:
