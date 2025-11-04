@@ -1406,10 +1406,11 @@ async def admin_add_channel_msg(message: Message, state: FSMContext):
             )
             return
 
-        channel_id = message.forward_from_chat.id
+        forward_chat = message.forward_from_chat
+        channel_id = forward_chat.id
 
         # Kanal type tekshirish
-        if message.forward_from_chat.type != 'channel':
+        if forward_chat.type != 'channel':
             await message.answer(
                 "❌ Это не канал! Перешлите сообщение из канала.",
                 reply_markup=cancel_kb
@@ -1421,31 +1422,41 @@ async def admin_add_channel_msg(message: Message, state: FSMContext):
         # Bot obyekti
         bot = message.bot
 
-        # ✅ TO'G'RI aiogram metodi
-        chat_info = await bot.get_chat(channel_id)
-        print(f"DEBUG: Chat info: {chat_info.title}")
+        # ✅ Bot admin yoki yo'qligini tekshirish
+        try:
+            bot_member = await bot.get_chat_member(channel_id, bot.id)
+            print(f"DEBUG: Bot status: {bot_member.status}")
 
-        # ✅ TO'G'RI aiogram metodi
-        bot_member = await bot.get_chat_member(channel_id, bot.id)
-        print(f"DEBUG: Bot status: {bot_member.status}")
-
-        if bot_member.status not in ["administrator", "creator"]:
+            if bot_member.status not in ["administrator", "creator"]:
+                await message.answer(
+                    f"❌ Бот не администратор в '{forward_chat.title}'",
+                    reply_markup=cancel_kb
+                )
+                return
+        except Exception as e:
+            print(f"DEBUG: Error checking bot status: {e}")
             await message.answer(
-                f"❌ Бот не администратор в '{chat_info.title}'",
+                f"❌ Не удалось проверить права бота в канале",
                 reply_markup=cancel_kb
             )
             return
 
-        # Invite link olish
-        invite_link = chat_info.invite_link
-        if not invite_link:
-            try:
-                # ✅ TO'G'RI aiogram metodi
+        # ✅ Invite link olish (get_chat() siz!)
+        invite_link = None
+        try:
+            # Avval username bor yoki yo'qligini tekshirish
+            if hasattr(forward_chat, 'username') and forward_chat.username:
+                invite_link = f"https://t.me/{forward_chat.username}"
+            else:
+                # Username yo'q bo'lsa - invite link yaratish
                 link_data = await bot.create_chat_invite_link(channel_id)
                 invite_link = link_data.invite_link
-            except Exception as e:
-                print(f"DEBUG: Invite link error: {e}")
-                invite_link = f"Channel ID: {channel_id}"
+        except Exception as e:
+            print(f"DEBUG: Invite link error: {e}")
+            invite_link = f"Channel ID: {channel_id}"
+
+        # Kanal title ni forward_from_chat dan olamiz
+        channel_title = forward_chat.title or "Канал"
 
         # Bazaga saqlash
         await create_channel_sponsor(channel_id)
@@ -1453,7 +1464,7 @@ async def admin_add_channel_msg(message: Message, state: FSMContext):
 
         await message.answer(
             f"✅ Канал добавлен!\n\n"
-            f"📣 {chat_info.title}\n"
+            f"📣 {channel_title}\n"
             f"🆔 {channel_id}\n"
             f"🔗 {invite_link}"
         )
