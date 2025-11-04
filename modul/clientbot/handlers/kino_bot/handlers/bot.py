@@ -2307,6 +2307,8 @@ async def start(message: Message, state: FSMContext, bot: Bot):
     await message.answer(text, **kwargs)
 
 import html
+
+
 @client_bot_router.message(CommandStart(), NonChatGptFilter())
 async def start_on(message: Message, state: FSMContext, bot: Bot, command: CommandObject):
     try:
@@ -2367,25 +2369,55 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
                         print(f"📢 Sponsor channel {channel_id} checked via client_bot: {member.status}")
 
                     if member.status in ["left", "kicked"]:
+                        title = "Канал"
+                        invite_link = None
+
                         try:
+                            # Chat info olish
                             if channel_type == 'system':
                                 from modul.loader import main_bot
                                 chat_info = await main_bot.get_chat(chat_id=int(channel_id))
                             else:
                                 chat_info = await message.bot.get_chat(chat_id=int(channel_id))
 
-                            not_subscribed_channels.append({
-                                'id': channel_id,
-                                'title': chat_info.title,
-                                'invite_link': channel_url or chat_info.invite_link or f"https://t.me/{channel_id.strip('-')}"
-                            })
+                            title = chat_info.title or "Канал"
+
+                            # ✅ TO'G'RI invite link olish
+                            # 1. Database'dagi channel_url
+                            if channel_url:
+                                invite_link = channel_url
+                            # 2. chat_info.invite_link
+                            elif getattr(chat_info, "invite_link", None):
+                                invite_link = chat_info.invite_link
+                            # 3. username
+                            elif getattr(chat_info, "username", None):
+                                invite_link = f"https://t.me/{chat_info.username}"
+                            # 4. Yangi link yaratish
+                            else:
+                                try:
+                                    check_bot = main_bot if channel_type == 'system' else message.bot
+                                    link_obj = await check_bot.create_chat_invite_link(int(channel_id))
+                                    invite_link = link_obj.invite_link
+                                except Exception as link_err:
+                                    logger.warning(f"Can't create invite link for {channel_id}: {link_err}")
+                                    # Private channel format
+                                    invite_link = f"https://t.me/c/{str(channel_id).replace('-100', '')}"
+
                         except Exception as e:
                             print(f"⚠️ Error getting chat info for {channel_id}: {e}")
-                            not_subscribed_channels.append({
-                                'id': channel_id,
-                                'title': "Канал",
-                                'invite_link': channel_url or f"https://t.me/{channel_id.strip('-')}"
-                            })
+
+                            # ✅ Xato bo'lganda ham link topish
+                            if channel_url:
+                                invite_link = channel_url
+                            else:
+                                # Private channel format
+                                invite_link = f"https://t.me/c/{str(channel_id).replace('-100', '')}"
+
+                        not_subscribed_channels.append({
+                            'id': channel_id,
+                            'title': title,
+                            'invite_link': invite_link
+                        })
 
                 except TelegramBadRequest as e:
                     logger.error(f"TelegramBadRequest for channel {channel_id} ({channel_type}): {e}")
@@ -2488,7 +2520,7 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
         else:
             print(f"ℹ️ User {user_id} already registered")
 
-            # ✅ QOSHILDI: Mavjud user uchun ham referral jarayoni
+            # ✅ Mavjud user uchun ham referral jarayoni
             if referral and referral.isdigit():
                 ref_id = int(referral)
                 print(f"\n🎁 Processing referral for existing user:")
@@ -2498,7 +2530,6 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
                 if ref_id == user_id:
                     print(f"   ⚠️ Self-referral - SKIPPING")
                 else:
-                    # User ma'lumotini olish
                     try:
                         user_tg = await get_user_by_id(user_id)
 
@@ -2507,7 +2538,6 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
                         elif not hasattr(user_tg, 'invited_id'):
                             print(f"   ⚠️ user_tg has no invited_id attribute")
                         elif user_tg.invited_id != ref_id:
-                            # Referrer shu botda bormi?
                             referrer_exists = await check_user_in_specific_bot(ref_id, bot.token)
                             print(f"   Referrer exists: {referrer_exists}")
 
