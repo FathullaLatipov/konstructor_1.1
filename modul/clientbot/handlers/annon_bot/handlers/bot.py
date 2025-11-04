@@ -309,7 +309,7 @@ async def start_command(message: Message, state: FSMContext, bot: Bot, command: 
     args = command.args
     logger.info(f"Anon bot start: user {user_id}, args: {args}")
 
-    channels = await get_channels_with_type_for_check()
+    channels = await get_channels_with_type_for_check(bot.token)
     if channels:
         subscribed_all = True
         invalid_channels_to_remove = []
@@ -426,7 +426,7 @@ async def check_channels_callback(callback: CallbackQuery, state: FSMContext, bo
 
     print(f"DEBUG: user_id={user_id}, referrer_args='{referrer_args}'")
 
-    channels = await get_channels_with_type_for_check()
+    channels = await get_channels_with_type_for_check(bot.token)
     subscribed_all = True
     invalid_channels_to_remove = []
 

@@ -5,29 +5,7 @@ import subprocess
 import tempfile
 import time
 import traceback
-from contextlib import suppress
-import shutil
 
-import os
-import re
-import time
-import asyncio
-import aiohttp
-import tempfile
-import shutil
-from typing import Optional, Dict, Any, Tuple
-from contextlib import asynccontextmanager
-from dataclasses import dataclass
-from enum import Enum
-
-from aiogram import Bot, F
-from aiogram.types import Message, CallbackQuery, FSInputFile, InlineKeyboardButton
-from aiogram.utils.keyboard import InlineKeyboardBuilder
-from aiogram.fsm.context import FSMContext
-import logging
-
-
-import requests
 from aiogram import Bot, F, html
 from aiogram.exceptions import TelegramForbiddenError, TelegramBadRequest
 from aiogram.filters import Command, CommandStart, CommandObject, Filter, BaseFilter, command
@@ -120,10 +98,17 @@ class KinoBotFilter(Filter):
 
 
 @sync_to_async
-def get_channels_with_type_for_check():
+def get_channels_with_type_for_check(bot_token: str = None):  # ← bot_token qo'shing
     try:
-        sponsor_channels = ChannelSponsor.objects.all()
-        # ✅ URL ni database'dan olamiz
+        if bot_token:
+            bot_obj = Bot.objects.filter(token=bot_token).first()
+            if bot_obj:
+                sponsor_channels = ChannelSponsor.objects.filter(bot=bot_obj)
+            else:
+                sponsor_channels = []
+        else:
+            sponsor_channels = ChannelSponsor.objects.all()
+
         sponsor_list = [(str(c.chanel_id), c.url or '', 'sponsor') for c in sponsor_channels]
 
         system_channels = SystemChannel.objects.filter(is_active=True)
@@ -2339,7 +2324,7 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
             print(f"💾 Referral saved to state: {referral}")
 
         # 3️⃣ KANALLARNI TEKSHIRISH
-        channels = await get_channels_with_type_for_check()
+        channels = await get_channels_with_type_for_check(bot.token)
         print(f"📡 Found {len(channels) if channels else 0} channels")
 
         if channels:

@@ -396,7 +396,12 @@ class AdminInfo(models.Model):
 
 class ChannelSponsor(models.Model):
     chanel_id = models.CharField(max_length=255)
-    url = models.CharField(max_length=500, blank=True, null=True)
+    url = models.URLField(max_length=500, blank=True, null=True)
+    bot = models.ForeignKey(Bot, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['chanel_id', 'bot']
 
 
 class Messages(models.Model):

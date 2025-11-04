@@ -1,22 +1,30 @@
-from modul.models import ChannelSponsor, SystemChannel
-from asgiref.sync import sync_to_async
+import logging
 
+from modul.models import ChannelSponsor, SystemChannel, Bot
+from asgiref.sync import sync_to_async
+logger = logging.getLogger(__name__)
 
 @sync_to_async
-def create_channel_sponsor(channel_id: int, url: str = None):
-    """
-    Sponsor kanal yaratish yoki yangilash
-    """
-    channel, created = ChannelSponsor.objects.get_or_create(
-        chanel_id=channel_id,
-        defaults={'url': url or ''}
-    )
+def create_channel_sponsor(channel_id: int, url: str = None, bot_token: str = None):
+    try:
+        bot_obj = Bot.objects.filter(token=bot_token).first()
+        if not bot_obj:
+            return None
 
-    if not created and url:
-        channel.url = url
-        channel.save()
+        channel, created = ChannelSponsor.objects.get_or_create(
+            chanel_id=channel_id,
+            bot=bot_obj,  # ← Bot qo'shildi
+            defaults={'url': url or ''}
+        )
 
-    return channel
+        if not created and url:
+            channel.url = url
+            channel.save()
+
+        return channel
+    except Exception as e:
+        logger.error(f"Error creating sponsor channel: {e}")
+        return None
 
 @sync_to_async
 def remove_channel_sponsor(channel_id):
