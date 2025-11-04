@@ -256,7 +256,7 @@ async def get_subs_kb(bot: Bot) -> types.InlineKeyboardMarkup:
             try:
                 # Kanal ma'lumotini olish
                 chat = await chat_bot.get_chat(channel_id)
-                title = chat.title or "Канал"
+                title = chat.title or "Подписаться"
 
                 # URL topish
                 if getattr(chat, "invite_link", None):
@@ -270,7 +270,7 @@ async def get_subs_kb(bot: Bot) -> types.InlineKeyboardMarkup:
             except Exception as e:
                 logger.warning(f"Can't fetch info for {channel_id} ({channel_type}): {e}")
                 # Agar nomni ololmasak
-                title = "Канал"
+                title = "Подписаться"
                 # URL ham bo'lmasa — tashlab ketamiz
                 if not url:
                     continue
@@ -1445,7 +1445,7 @@ async def admin_add_channel_msg(message: Message, state: FSMContext):
 
         # ✅ Invite link olish
         invite_link = None
-        channel_title = forward_chat.title or "Канал"
+        channel_title = forward_chat.title or "Подписаться"
 
         # 1. Username bor yoki yo'qligini tekshirish
         if hasattr(forward_chat, 'username') and forward_chat.username:
@@ -1732,7 +1732,7 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
                     try:
                         check_bot = main_bot if channel_type == 'system' else bot
                         chat_info = await check_bot.get_chat(chat_id=channel_id_int)
-                        title = chat_info.title or "Канал"
+                        title = chat_info.title or "Подписаться"
 
                         # ✅ TO'G'RI invite link olish
                         # 1. Avval database'dagi channel_url
@@ -1794,7 +1794,7 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
 
                 not_subscribed_channels.append({
                     'id': channel_id,
-                    'title': "Канал",
+                    'title': "Подписаться",
                     'invite_link': invite_link,
                     'type': channel_type
                 })
@@ -1818,7 +1818,7 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
 
                 not_subscribed_channels.append({
                     'id': channel_id,
-                    'title': "Канал",
+                    'title': "Подписаться",
                     'invite_link': invite_link,
                     'type': channel_type
                 })
@@ -1837,7 +1837,7 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
         markup = InlineKeyboardBuilder()
 
         for index, channel in enumerate(not_subscribed_channels):
-            title = channel['title'] or "Канал"
+            title = channel['title'] or "Подписаться"
             invite_link = channel['invite_link']
             channels_text += f"{index + 1}. {title}\n"
             markup.button(text=f"📢 {title}", url=invite_link)
@@ -2373,7 +2373,7 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
                         print(f"📢 Sponsor channel {channel_id} checked via client_bot: {member.status}")
 
                     if member.status in ["left", "kicked"]:
-                        title = "Канал"
+                        title = "Подписаться"
                         invite_link = None
 
                         try:
@@ -2384,7 +2384,7 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
                             else:
                                 chat_info = await message.bot.get_chat(chat_id=int(channel_id))
 
-                            title = chat_info.title or "Канал"
+                            title = chat_info.title or "Подписаться"
 
                             # ✅ TO'G'RI invite link olish
                             # 1. Database'dagi channel_url
