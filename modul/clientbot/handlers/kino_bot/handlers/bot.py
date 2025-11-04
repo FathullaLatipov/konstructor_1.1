@@ -1419,7 +1419,6 @@ async def admin_add_channel_msg(message: Message, state: FSMContext):
 
         print(f"DEBUG: Channel ID: {channel_id}")
 
-        # Bot obyekti
         bot = message.bot
 
         # ✅ Bot admin yoki yo'qligini tekshirish
@@ -1441,35 +1440,37 @@ async def admin_add_channel_msg(message: Message, state: FSMContext):
             )
             return
 
-        # ✅ Invite link olish (get_chat() siz!)
+        # ✅ Invite link olish
         invite_link = None
-        try:
-            # Avval username bor yoki yo'qligini tekshirish
-            if hasattr(forward_chat, 'username') and forward_chat.username:
-                invite_link = f"https://t.me/{forward_chat.username}"
-            else:
-                # Username yo'q bo'lsa - invite link yaratish
-                link_data = await bot.create_chat_invite_link(channel_id)
-                invite_link = link_data.invite_link
-        except Exception as e:
-            print(f"DEBUG: Invite link error: {e}")
-            invite_link = f"Channel ID: {channel_id}"
-
-        # Kanal title ni forward_from_chat dan olamiz
         channel_title = forward_chat.title or "Канал"
 
-        # Bazaga saqlash
-        await create_channel_sponsor(channel_id)
+        # 1. Username bor yoki yo'qligini tekshirish
+        if hasattr(forward_chat, 'username') and forward_chat.username:
+            invite_link = f"https://t.me/{forward_chat.username}"
+            print(f"DEBUG: Got invite link from username: {invite_link}")
+        else:
+            # 2. Yangi invite link yaratish
+            try:
+                link_data = await bot.create_chat_invite_link(channel_id)
+                invite_link = link_data.invite_link
+                print(f"DEBUG: Created new invite link: {invite_link}")
+            except Exception as e:
+                print(f"DEBUG: Invite link error: {e}")
+                # 3. Fallback - database'ga null saqlanadi, lekin kanal qo'shiladi
+                invite_link = ""
+
+        # ✅ Bazaga saqlash - URL bilan birga!
+        await create_channel_sponsor(channel_id, url=invite_link)
         await state.clear()
 
         await message.answer(
             f"✅ Канал добавлен!\n\n"
             f"📣 {channel_title}\n"
             f"🆔 {channel_id}\n"
-            f"🔗 {invite_link}"
+            f"🔗 {invite_link or 'Ссылка не получена'}"
         )
 
-        print("DEBUG: Channel added successfully")
+        print("DEBUG: Channel added successfully with URL")
 
     except Exception as e:
         print(f"DEBUG: Error in admin_add_channel_msg: {e}")

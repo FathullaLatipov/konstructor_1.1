@@ -3,9 +3,20 @@ from asgiref.sync import sync_to_async
 
 
 @sync_to_async
-def create_channel_sponsor(channel_id: int):
-    ChannelSponsor.objects.get_or_create(chanel_id=channel_id)
-    return
+def create_channel_sponsor(channel_id: int, url: str = None):
+    """
+    Sponsor kanal yaratish yoki yangilash
+    """
+    channel, created = ChannelSponsor.objects.get_or_create(
+        chanel_id=channel_id,
+        defaults={'url': url or ''}
+    )
+
+    if not created and url:
+        channel.url = url
+        channel.save()
+
+    return channel
 
 @sync_to_async
 def remove_channel_sponsor(channel_id):

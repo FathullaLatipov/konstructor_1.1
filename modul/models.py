@@ -395,7 +395,8 @@ class AdminInfo(models.Model):
 
 
 class ChannelSponsor(models.Model):
-    chanel_id = models.BigIntegerField()
+    chanel_id = models.CharField(max_length=255)
+    url = models.CharField(max_length=500, blank=True, null=True)
 
 
 class Messages(models.Model):
