@@ -565,7 +565,7 @@ async def create_channels_keyboard(channels, bot):
                 else:
                     chat = await bot.get_chat(channel_id)
                 invite_link = channel_url or chat.invite_link or f"https://t.me/{chat.username}"
-                title = chat.title or 'Канал'
+                title = chat.title or 'Подписаться'
             else:
                 if isinstance(channel_info, tuple):
                     channel_id = int(channel_info[0])
@@ -575,7 +575,7 @@ async def create_channels_keyboard(channels, bot):
                     channel_url = ""
                 chat = await bot.get_chat(channel_id)
                 invite_link = channel_url or chat.invite_link or f"https://t.me/{chat.username}"
-                title = chat.title or 'Канал'
+                title = chat.title or 'Подписаться'
             keyboard.append([
                 InlineKeyboardButton(
                     text=f"📢 {title}",
