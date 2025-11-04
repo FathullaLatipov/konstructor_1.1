@@ -2283,8 +2283,6 @@ async def start(message: Message, state: FSMContext, bot: Bot):
     await message.answer(text, **kwargs)
 
 import html
-
-
 @client_bot_router.message(CommandStart(), NonChatGptFilter())
 async def start_on(message: Message, state: FSMContext, bot: Bot, command: CommandObject):
     try:
@@ -2319,8 +2317,6 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
 
             for channel_id, channel_url, channel_type in channels:
                 try:
-                    # ✅ SYSTEM KANAL: main_bot ishlatish
-                    # ✅ SPONSOR KANAL: client bot ishlatish
                     if channel_type == 'system':
                         from modul.loader import main_bot
                         try:
@@ -2335,23 +2331,19 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
                                     f"⚠️ main_bot can't access system channel {channel_id}. "
                                     f"Please add main_bot as admin to this channel. Error: {e}"
                                 )
-                                # System kanal xatosini IGNORE qilamiz va davom etamiz
                                 print(f"⚠️ IGNORING system channel {channel_id} error - continuing...")
                                 continue
                             else:
                                 raise
                     else:
-                        # Sponsor kanal - client bot ishlatish
                         member = await message.bot.get_chat_member(
                             chat_id=int(channel_id),
                             user_id=user_id
                         )
                         print(f"📢 Sponsor channel {channel_id} checked via client_bot: {member.status}")
 
-                    # Agar obuna bo'lmagan bo'lsa
                     if member.status in ["left", "kicked"]:
                         try:
-                            # Chat info olish - to'g'ri bot orqali
                             if channel_type == 'system':
                                 from modul.loader import main_bot
                                 chat_info = await main_bot.get_chat(chat_id=int(channel_id))
@@ -2375,11 +2367,9 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
                     logger.error(f"TelegramBadRequest for channel {channel_id} ({channel_type}): {e}")
 
                     if channel_type == 'sponsor':
-                        # Sponsor kanal invalid - o'chirish
                         await remove_sponsor_channel(channel_id)
                         logger.info(f"Removed invalid sponsor channel {channel_id}")
                     else:
-                        # System kanal xatosi - ignore
                         logger.warning(f"System channel {channel_id} error (ignoring): {e}")
                     continue
 
@@ -2387,7 +2377,6 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
                     logger.error(f"Unexpected error checking channel {channel_id} ({channel_type}): {e}")
                     continue
 
-            # Agar obuna bo'lmagan kanallar bo'lsa
             if not_subscribed_channels:
                 print(f"🚫 User {user_id} NOT subscribed to {len(not_subscribed_channels)} channels")
                 print(f"⏳ WAITING for subscription")
@@ -2416,12 +2405,14 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
         is_registered = await check_user_in_specific_bot(user_id, bot.token)
         print(f"🔍 User registered: {is_registered}")
 
+        # State dan referral olish
+        state_data = await state.get_data()
+        referral = state_data.get('referral')
+        print(f"📋 Referral from state: {referral}")
+
+        # --- YANGI USER ---
         if not is_registered:
             print(f"➕ Registering new user {user_id}")
-
-            state_data = await state.get_data()
-            referral = state_data.get('referral')
-            print(f"📋 Referral from state: {referral}")
 
             registration_success = await add_user_safely(
                 tg_id=user_id,
@@ -2434,7 +2425,7 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
             if registration_success:
                 print(f"✅ User {user_id} registered successfully")
 
-                # 5️⃣ REFERRAL BONUS
+                # REFERRAL BONUS
                 if referral and referral.isdigit():
                     ref_id = int(referral)
                     print(f"\n🎁 Processing referral bonus:")
@@ -2468,8 +2459,61 @@ async def start_on(message: Message, state: FSMContext, bot: Bot, command: Comma
                                     print(f"   ⚠️ Error sending notification: {e}")
                         else:
                             print(f"   ⚠️ Referrer not in this bot")
+
+        # --- MAVJUD USER ---
         else:
-            print(f"ℹ️ User already registered")
+            print(f"ℹ️ User {user_id} already registered")
+
+            # ✅ QOSHILDI: Mavjud user uchun ham referral jarayoni
+            if referral and referral.isdigit():
+                ref_id = int(referral)
+                print(f"\n🎁 Processing referral for existing user:")
+                print(f"   Existing user: {user_id}")
+                print(f"   New referrer: {ref_id}")
+
+                if ref_id == user_id:
+                    print(f"   ⚠️ Self-referral - SKIPPING")
+                else:
+                    # User ma'lumotini olish
+                    try:
+                        user_tg = await get_user_by_id(user_id)
+
+                        if not user_tg:
+                            print(f"   ⚠️ User {user_id} not found in database")
+                        elif not hasattr(user_tg, 'invited_id'):
+                            print(f"   ⚠️ user_tg has no invited_id attribute")
+                        elif user_tg.invited_id != ref_id:
+                            # Referrer shu botda bormi?
+                            referrer_exists = await check_user_in_specific_bot(ref_id, bot.token)
+                            print(f"   Referrer exists: {referrer_exists}")
+
+                            if referrer_exists:
+                                success, reward = await process_referral_bonus(user_id, ref_id, bot.token)
+                                print(f"   Result: success={success}, reward={reward}")
+
+                                if success and reward > 0:
+                                    try:
+                                        user_name = html.escape(message.from_user.first_name)
+                                        user_profile_link = f'tg://user?id={user_id}'
+
+                                        await bot.send_message(
+                                            chat_id=ref_id,
+                                            text=f"🎉 <b>У вас новый реферал!</b>\n\n"
+                                                 f"👤 <a href='{user_profile_link}'>{user_name}</a>\n"
+                                                 f"💰 Получено: {reward}₽",
+                                            parse_mode="HTML"
+                                        )
+                                        print(f"   ✅ Notification sent")
+                                    except Exception as e:
+                                        print(f"   ⚠️ Error sending notification: {e}")
+                            else:
+                                print(f"   ⚠️ Referrer {ref_id} not in this bot")
+                        else:
+                            print(f"   ℹ️ User already has this referrer")
+                    except Exception as e:
+                        print(f"   ❌ Error processing referral: {e}")
+                        import traceback
+                        traceback.print_exc()
 
         await state.clear()
         await start(message, state, bot)
