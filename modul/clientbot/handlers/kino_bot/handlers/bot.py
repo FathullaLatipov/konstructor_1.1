@@ -1685,6 +1685,7 @@ async def process_referral(inviter_id: int, new_user_id: int, current_bot_token:
         logger.error(traceback.format_exc())
         return False
 
+
 @client_bot_router.callback_query(lambda c: c.data == 'check_chan', NonChatGptFilter())
 async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: Bot):
     user_id = callback.from_user.id
@@ -1721,23 +1722,43 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
 
                 if member.status in ["left", "kicked"]:
                     subscribed = False
+                    title = "Канал"
+                    invite_link = None
+
                     try:
                         check_bot = main_bot if channel_type == 'system' else bot
                         chat_info = await check_bot.get_chat(chat_id=channel_id_int)
                         title = chat_info.title or "Канал"
-                        invite_link = (
-                            channel_url
-                            or getattr(chat_info, "invite_link", None)
-                            or (
-                                f"https://t.me/{chat_info.username}"
-                                if getattr(chat_info, "username", None)
-                                else f"https://t.me/{str(channel_id).replace('-100', '')}"
-                            )
-                        )
+
+                        # ✅ TO'G'RI invite link olish
+                        # 1. Avval database'dagi channel_url
+                        if channel_url:
+                            invite_link = channel_url
+                        # 2. Keyin chat_info.invite_link
+                        elif getattr(chat_info, "invite_link", None):
+                            invite_link = chat_info.invite_link
+                        # 3. Keyin username (agar bor bo'lsa)
+                        elif getattr(chat_info, "username", None):
+                            invite_link = f"https://t.me/{chat_info.username}"
+                        # 4. Oxirida yangi invite link yaratish
+                        else:
+                            try:
+                                link_obj = await check_bot.create_chat_invite_link(channel_id_int)
+                                invite_link = link_obj.invite_link
+                            except Exception as link_err:
+                                logger.warning(f"Can't create invite link for {channel_id}: {link_err}")
+                                # Fallback: private channel link format
+                                invite_link = f"https://t.me/c/{str(channel_id_int).replace('-100', '')}"
+
                     except Exception as e:
                         print(f"⚠️ Error getting chat info for channel {channel_id}: {e}")
-                        title = "Канал"
-                        invite_link = channel_url or f"https://t.me/{str(channel_id).replace('-100', '')}"
+
+                        # ✅ Xato bo'lganda ham link topish
+                        if channel_url:
+                            invite_link = channel_url
+                        else:
+                            # Private channel format
+                            invite_link = f"https://t.me/c/{str(channel_id_int).replace('-100', '')}"
 
                     not_subscribed_channels.append({
                         'id': channel_id,
@@ -1749,27 +1770,27 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
             except TelegramBadRequest as e:
                 logger.error(f"TelegramBadRequest for channel {channel_id} (type: {channel_type}): {e}")
 
-                # ✅ TUZATILDI: System kanal xatosini ignore qilish
+                # ✅ System kanal xatosini ignore qilish
                 if channel_type == 'system':
                     if "PARTICIPANT_ID_INVALID" in str(e) or "Bad Request" in str(e):
                         logger.warning(
                             f"⚠️ main_bot can't access system channel {channel_id}. "
                             f"Add main_bot as admin. Ignoring this channel."
                         )
-                        continue  # ← System kanal xatosini ignore
+                        continue
                     else:
-                        # Boshqa xatolar uchun ham ignore (user haqiqatan obuna bo'lmagan bo'lishi mumkin)
                         logger.warning(f"System channel {channel_id} error - ignoring: {e}")
                         continue
 
                 # ❗ FAQAT sponsor kanal uchun "obuna emas" deb hisoblaymiz
                 subscribed = False
-                title = "Канал"
-                invite_link = channel_url or f"https://t.me/{str(channel_id).replace('-100', '')}"
+
+                # Link topish
+                invite_link = channel_url if channel_url else f"https://t.me/c/{str(channel_id).replace('-100', '')}"
 
                 not_subscribed_channels.append({
                     'id': channel_id,
-                    'title': title,
+                    'title': "Канал",
                     'invite_link': invite_link,
                     'type': channel_type
                 })
@@ -1781,17 +1802,20 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
             except Exception as e:
                 logger.error(f"Unexpected error for channel {channel_id} (type: {channel_type}): {e}")
 
-                # ✅ TUZATILDI: System kanal uchun ignore
+                # ✅ System kanal uchun ignore
                 if channel_type == 'system':
                     logger.warning(f"System channel {channel_id} error - ignoring: {e}")
-                    continue  # ← System kanal xatosini ignore
+                    continue
 
                 # Sponsor kanal uchun "obuna emas"
                 subscribed = False
+
+                invite_link = channel_url if channel_url else f"https://t.me/c/{str(channel_id).replace('-100', '')}"
+
                 not_subscribed_channels.append({
                     'id': channel_id,
                     'title': "Канал",
-                    'invite_link': channel_url or f"https://t.me/{str(channel_id).replace('-100', '')}",
+                    'invite_link': invite_link,
                     'type': channel_type
                 })
 
@@ -1883,7 +1907,7 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
                         profile_link = f"tg://user?id={user_id}"
                         await bot.send_message(
                             chat_id=referral_id,
-                            text=f"У вас новый реферал! <a href='{profile_link}'>{user_name}</a>",
+                            text=f"🎉 У вас новый реферал! <a href='{profile_link}'>{user_name}</a>",
                             parse_mode="HTML"
                         )
                     except Exception as e:
@@ -1924,7 +1948,7 @@ async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: B
                             profile_link = f"tg://user?id={user_id}"
                             await bot.send_message(
                                 chat_id=referral_id,
-                                text=f"У вас новый реферал! <a href='{profile_link}'>{user_name}</a>",
+                                text=f"🎉 У вас новый реферал! <a href='{profile_link}'>{user_name}</a>",
                                 parse_mode="HTML"
                             )
                         except Exception as e:
