@@ -121,7 +121,7 @@ async def start_message(message: types.Message, state: FSMContext, bot: Bot):
             await state.update_data(referral=referral)
             print(f"Extracted referral: {referral}")
 
-    channels = await get_channels_with_type_for_check(bot.token)
+    channels = await get_channels_with_type_for_check()
     print(f"📡 Found channels: {channels}")
 
     if channels:
@@ -262,7 +262,7 @@ async def check_channels_chatgpt_callback(callback: CallbackQuery, state: FSMCon
     print(f"👤 Referral from state for user {user_id}: {referral}")
 
     # Kanallarni qayta tekshirish
-    channels = await get_channels_with_type_for_check(bot.token)
+    channels = await get_channels_with_type_for_check()
 
     subscribed_all = True
     invalid_channels_to_remove = []

@@ -607,8 +607,9 @@ def get_channels_with_type_for_check():
         return []
 
 @client_bot_router.callback_query(F.data == "check_chan",RefsBotFilter())
-async def check_chan_callback(query: CallbackQuery, state: FSMContext, bot: Bot ):
+async def check_chan_callback(query: CallbackQuery, state: FSMContext):
     try:
+        bot = query.bot
         user_id = query.from_user.id
         print(f"🔍 NEW check_chan callback triggered for user {user_id}")
         state_data = await state.get_data()
@@ -616,7 +617,7 @@ async def check_chan_callback(query: CallbackQuery, state: FSMContext, bot: Bot 
         referrer_id = state_data.get('referrer_id') or state_data.get('referral')
         print(f"👤 Referrer_id from state for user {user_id}: {referrer_id}")
 
-        channels = await get_channels_with_type_for_check(bot.token)
+        channels = await get_channels_with_type_for_check()
         print(f"📡 Channels for user {user_id}: {channels}")
         not_subscribed_channels = []
 
@@ -1000,9 +1001,9 @@ async def check_channels_properly(query):
     """Kanallarni to'g'ri tekshirish - system kanallar main bot orqali"""
     try:
         user_id = query.from_user.id
-        bot: Bot
+
         # Kanallarni olish
-        channels = await get_channels_with_type_for_check(bot.token)
+        channels = await get_channels_with_type_for_check()
 
         if not channels:
             return True  # Kanal yo'q bo'lsa, o'tkazib yuborish
