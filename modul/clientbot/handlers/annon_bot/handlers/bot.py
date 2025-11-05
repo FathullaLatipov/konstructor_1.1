@@ -619,30 +619,79 @@ async def check_channels_callback(callback: CallbackQuery, state: FSMContext, bo
     await callback.answer()
 
 
-async def create_channels_keyboard(channels, bot):
+async def create_channels_keyboard(channels, bot: Bot):
     keyboard = []
     for channel_info in channels:
         try:
+            # format: (channel_id, channel_url, channel_type)
             if isinstance(channel_info, tuple) and len(channel_info) == 3:
                 channel_id, channel_url, channel_type = channel_info
-                channel_id = int(channel_id)
-                if channel_type == 'system':
+                channel_id_int = int(channel_id)
+
+                # 🔹 1) Sponsor kanallar uchun – bazadagi URLni ishlatamiz,
+                #     bot.get_chat NI CHAQIRMAYMIZ (shu joy aiogramni yiqityapti)
+                if channel_type == 'sponsor':
+                    invite_link = channel_url or ""
+                    if not invite_link:
+                        # URL saqlanmagan bo'lsa – bu kanalni o'tkazib yuboramiz
+                        logger.error(f"No URL for sponsor channel {channel_id_int}, skipping")
+                        continue
+
+                    title = "Подписаться"
+
+                # 🔹 2) System kanallar uchun – xohlasak get_chat chaqirishimiz mumkin,
+                #     lekin xatoni ushlab, URL bo'yicha fallback qilamiz
+                elif channel_type == 'system':
                     from modul.loader import main_bot
-                    chat = await main_bot.get_chat(channel_id)
+                    chat = None
+                    invite_link = channel_url or ""
+
+                    try:
+                        chat = await main_bot.get_chat(channel_id_int)
+                    except Exception as e:
+                        logger.error(f"Error getting system chat info for {channel_id_int}: {e}")
+
+                    if chat:
+                        # Agar chat ma'lumotlari kelsa – undan foydalanamiz
+                        invite_link = invite_link or chat.invite_link or (
+                            f"https://t.me/{chat.username}" if getattr(chat, "username", None) else invite_link
+                        )
+                        title = chat.title or "Подписаться"
+                    else:
+                        # Fallback: faqat URL bo'yicha
+                        if not invite_link:
+                            logger.error(f"No URL for system channel {channel_id_int}, skipping")
+                            continue
+                        title = "Подписаться"
+
                 else:
-                    chat = await bot.get_chat(channel_id)
-                invite_link = channel_url or chat.invite_link or f"https://t.me/{chat.username}"
-                title = chat.title or 'Подписаться'
+                    # Noma'lum type – o'tkazib yuboramiz
+                    logger.error(f"Unknown channel_type={channel_type} for {channel_info}")
+                    continue
+
             else:
+                # Eski format (faqat channel_id berilgan) bo'lsa
                 if isinstance(channel_info, tuple):
-                    channel_id = int(channel_info[0])
+                    channel_id_int = int(channel_info[0])
                     channel_url = channel_info[1] if len(channel_info) > 1 else ""
                 else:
-                    channel_id = int(channel_info)
+                    channel_id_int = int(channel_info)
                     channel_url = ""
-                chat = await bot.get_chat(channel_id)
-                invite_link = channel_url or chat.invite_link or f"https://t.me/{chat.username}"
-                title = chat.title or 'Подписаться'
+
+                # Bu holda ham get_chat'ni ishlatmasdan URL'ga tayanamiz
+                invite_link = channel_url
+                if not invite_link:
+                    # URL bo'lmasa – sinab ko'rib ko'ramiz
+                    try:
+                        chat = await bot.get_chat(channel_id_int)
+                        invite_link = chat.invite_link or (f"https://t.me/{chat.username}" if getattr(chat, "username", None) else "")
+                        title = chat.title or "Подписаться"
+                    except Exception as e:
+                        logger.error(f"Error getting chat for channel {channel_id_int}: {e}")
+                        continue
+                else:
+                    title = "Подписаться"
+
             keyboard.append([
                 InlineKeyboardButton(
                     text=f"📢 {title}",
@@ -652,10 +701,12 @@ async def create_channels_keyboard(channels, bot):
         except Exception as e:
             logger.error(f"Error creating button for channel {channel_info}: {e}")
             continue
+
     keyboard.append([
         InlineKeyboardButton(text="✅ Проверить подписку", callback_data="check_chan")
     ])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
 
 async def check_user_exists(user_id):
     from asgiref.sync import sync_to_async
