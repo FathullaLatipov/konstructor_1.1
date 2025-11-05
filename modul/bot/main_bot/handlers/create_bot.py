@@ -221,14 +221,20 @@ async def start_create_with_module(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-
-
 @create_bot_router.message(StateFilter(CreateBotStates.waiting_for_token))
 async def process_token(message: Message, state: FSMContext):
-    print('ishladi 228')
+    print('work token')
     """Обработка введенного токена"""
-    token = message.text.strip()
+    # Проверяем текущее состояние для отладки
+    current_state = await state.get_state()
+    print(f"Current state: {current_state}")
+    if current_state != CreateBotStates.waiting_for_token:
+        print(f"State mismatch: expected {CreateBotStates.waiting_for_token}, got {current_state}")
+        # Сбрасываем состояние и возвращаем, чтобы избежать "not handled"
+        await state.clear()
+        return
 
+    token = message.text.strip()
     # Проверка формата токена (полный паттерн)
     if not re.match(r'^\d{8,10}:[A-Za-z0-9_-]{35}$', token):
         await message.answer(
@@ -243,7 +249,6 @@ async def process_token(message: Message, state: FSMContext):
             parse_mode="HTML"
         )
         return
-
     # Проверка, не используется ли токен уже
     is_valid, error_message = await validate_bot_token(token)
     if not is_valid:
@@ -257,12 +262,10 @@ async def process_token(message: Message, state: FSMContext):
             parse_mode="HTML"
         )
         return
-
     # Получение информации о боте из Telegram
     try:
         # Анимация загрузки
         loading_msg = await message.answer("⏳ <b>Проверка токена...</b>", parse_mode="HTML")
-
         bot_info = await get_bot_info_from_telegram(token)
         if not bot_info:
             await loading_msg.edit_text(
@@ -278,7 +281,6 @@ async def process_token(message: Message, state: FSMContext):
                 parse_mode="HTML"
             )
             return
-
         if not bot_info.get('is_bot', False):
             await loading_msg.edit_text(
                 "❌ <b>Это не токен бота!</b>\n\n"
@@ -288,23 +290,27 @@ async def process_token(message: Message, state: FSMContext):
                 parse_mode="HTML"
             )
             return
-
         # Получаем выбранный модуль из state
         data = await state.get_data()
         print(data, "data all")
         selected_module = data.get('selected_module')
         print(selected_module)
         if selected_module is None:
-            await loading_msg.edit_text('modul muamosi')
-
+            await loading_msg.edit_text(
+                "❌ <b>Ошибка: модуль не выбран!</b>\n\n"
+                "Пожалуйста, начните процесс создания бота заново и выберите модуль.",
+                parse_mode="HTML"
+            )
+            await state.clear()  # Очищаем состояние для перезапуска
+            return
         if not selected_module:
             await loading_msg.edit_text(
                 "❌ <b>Модуль не выбран!</b>\n\n"
                 "Пожалуйста, начните заново и выберите модуль.",
                 parse_mode="HTML"
             )
+            await state.clear()
             return
-
         # Сохранение данных в state
         await state.update_data(
             token=token,
@@ -312,13 +318,10 @@ async def process_token(message: Message, state: FSMContext):
             bot_name=bot_info['first_name'],
             bot_id=bot_info['id']
         )
-
         # Создаем модули dict с выбранным модулем
         modules = {selected_module: True}
-
         # Автоматическое создание бота
         await loading_msg.edit_text("⏳ <b>Создание бота...</b>", parse_mode="HTML")
-
         # Проверка пользователя
         user = await get_user_by_uid(message.from_user.id)
         if not user:
@@ -327,6 +330,7 @@ async def process_token(message: Message, state: FSMContext):
                 "Пожалуйста, нажмите /start и зарегистрируйтесь заново.",
                 parse_mode="HTML"
             )
+            await state.clear()
             return
 
         # Создание бота
@@ -336,7 +340,6 @@ async def process_token(message: Message, state: FSMContext):
             username=bot_info['username'],
             modules=modules
         )
-
         if not new_bot:
             await loading_msg.edit_text(
                 "❌ <b>Ошибка при создании бота!</b>\n\n"
@@ -344,12 +347,11 @@ async def process_token(message: Message, state: FSMContext):
                 "Пожалуйста, попробуйте еще раз.",
                 parse_mode="HTML"
             )
+            await state.clear()
             return
-
         # Установка webhook
         webhook_url = settings_conf.WEBHOOK_URL.format(token=token)
         webhook_success = await set_bot_webhook(token, webhook_url)
-
         # Информация о выбранном модуле
         module_names = {
             'refs': '👥 Реферальный',
@@ -359,15 +361,11 @@ async def process_token(message: Message, state: FSMContext):
             'download': '💾 DownLoader',
             'chatgpt': '💡 ChatGPT'
         }
-
         print(f"Selected module: '{selected_module}'")
         print(f"Available modules: {list(module_names.keys())}")
-
         # Получаем название модуля
         selected_module_name = module_names.get(selected_module, f"⚙️ {selected_module}")
-
         print(f"Selected module name: '{selected_module_name}'")
-
         success_text = (
             f"🎉 <b>Бот успешно создан!</b>\n\n"
             f"🤖 <b>Информация о боте:</b>\n"
@@ -381,7 +379,6 @@ async def process_token(message: Message, state: FSMContext):
             f"✨ <b>Бот полностью настроен и готов к работе!</b>\n"
             f"📊 Для управления перейдите в раздел 'Мои боты'."
         )
-
         await loading_msg.edit_text(
             success_text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -392,11 +389,11 @@ async def process_token(message: Message, state: FSMContext):
             ]),
             parse_mode="HTML"
         )
-
         # Лог успеха
         logger.info(
             f"Bot created successfully: @{bot_info['username']} with module {selected_module} for user {message.from_user.id}")
-
+        # Очищаем состояние после успеха
+        await state.clear()
     except Exception as e:
         logger.error(f"Ошибка при обработке токена {token}: {e}")
         await message.answer(
@@ -407,6 +404,7 @@ async def process_token(message: Message, state: FSMContext):
             "службу поддержки: @support_username",
             parse_mode="HTML"
         )
+        await state.clear()
 
 
 # Cancel handler
