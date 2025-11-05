@@ -452,6 +452,26 @@ async def start_command(message: Message, state: FSMContext, bot: Bot, command: 
         reply_markup=await main_menu_bt()
     )
 
+@client_bot_router.message(AdminStates.wait_channel, AnonBotFilter())
+async def admin_add_channel_message(message: Message, state: FSMContext, bot: Bot):
+    if not message.forward_from_chat or message.forward_from_chat.type != "channel":
+        await message.answer("Пожалуйста перешлите сообщение из канала")
+        return
+
+    channel_id = str(message.forward_from_chat.id)
+    title = message.forward_from_chat.title
+
+    bot_db = await shortcuts.get_bot(bot)
+
+    await sync_to_async(ChannelSponsor.objects.get_or_create)(
+        chanel_id=channel_id,
+        bot=bot_db,
+        defaults={"url": None}
+    )
+
+    await state.clear()
+    await message.answer(f"✅ Канал «{title}» добавлен!", reply_markup=await main_menu_bt())
+
 
 
 @client_bot_router.callback_query(F.data == "check_chan", AnonBotFilter())
