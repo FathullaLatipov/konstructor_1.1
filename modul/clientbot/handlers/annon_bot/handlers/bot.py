@@ -269,28 +269,53 @@ async def show_main_menu(message: types.Message, bot: Bot):
     logger.info(f"Main menu sent to user {message.from_user.id}")
 
 @sync_to_async
-def remove_sponsor_channel(channel_id):
+def remove_sponsor_channel(channel_id, bot_token: str | None = None):
+    """
+    Sponsor kanalni o‘chiradi.
+    Agar bot_token berilsa – faqat shu botga tegishli yozuvni o‘chiradi.
+    """
     try:
-        from modul.models import ChannelSponsor
-        ChannelSponsor.objects.filter(chanel_id=channel_id).delete()
-        logger.info(f"Removed invalid sponsor channel {channel_id}")
+        from modul import models  # models.Bot uchun
+
+        qs = ChannelSponsor.objects.filter(chanel_id=channel_id)
+
+        if bot_token:
+            bot = models.Bot.objects.filter(token=bot_token).first()
+            if bot:
+                qs = qs.filter(bot=bot)
+
+        deleted, _ = qs.delete()
+        logger.info(f"Removed {deleted} sponsor channel(s) {channel_id} for bot_token={bot_token}")
     except Exception as e:
         logger.error(f"Error removing sponsor channel {channel_id}: {e}")
 
 
+
 @sync_to_async
-def get_channels_with_type_for_check():
+def get_channels_with_type_for_check(bot_token: str):
+
     try:
-        sponsor_channels = ChannelSponsor.objects.all()
+        from modul import models
+        bot = models.Bot.objects.filter(token=bot_token).first()
+        if not bot:
+            logger.error(f"get_channels_with_type_for_check: Bot not found for token {bot_token}")
+            return []
+
+        sponsor_channels = ChannelSponsor.objects.filter(bot=bot)
         sponsor_list = [(str(c.chanel_id), '', 'sponsor') for c in sponsor_channels]
+
         system_channels = SystemChannel.objects.filter(is_active=True)
         system_list = [(str(c.channel_id), c.channel_url, 'system') for c in system_channels]
+
         all_channels = sponsor_list + system_list
-        logger.info(f"Found sponsor channels: {len(sponsor_list)}, system channels: {len(system_list)}")
+        logger.info(
+            f"Found sponsor channels: {len(sponsor_list)}, system channels: {len(system_list)} for bot {bot.username}"
+        )
         return all_channels
     except Exception as e:
         logger.error(f"Error getting channels with type: {e}")
         return []
+
 
 
 async def generate_referral_link(bot, user_id):
@@ -309,10 +334,13 @@ async def start_command(message: Message, state: FSMContext, bot: Bot, command: 
     args = command.args
     logger.info(f"Anon bot start: user {user_id}, args: {args}")
 
+    # === KANALLARNI TEKSHIRISH BLOKI (YANGI VARIANT) ===
     channels = await get_channels_with_type_for_check(bot.token)
     if channels:
         subscribed_all = True
         invalid_channels_to_remove = []
+        valid_channels = []
+
         for channel_id, channel_url, channel_type in channels:
             try:
                 if channel_type == 'system':
@@ -322,9 +350,13 @@ async def start_command(message: Message, state: FSMContext, bot: Bot, command: 
                 else:
                     member = await bot.get_chat_member(chat_id=int(channel_id), user_id=user_id)
                     logger.info(f"Sponsor channel {channel_id} checked via current_bot: {member.status}")
+
+                # Tugmalar yaratish uchun baribir saqlab qo‘yamiz
+                valid_channels.append((channel_id, channel_url, channel_type))
+
                 if member.status in ['left', 'kicked']:
                     subscribed_all = False
-                    break
+
             except Exception as e:
                 logger.error(f"Error checking channel {channel_id} (type: {channel_type}): {e}")
                 if channel_type == 'sponsor':
@@ -333,19 +365,23 @@ async def start_command(message: Message, state: FSMContext, bot: Bot, command: 
                 else:
                     logger.warning(f"System channel {channel_id} error (ignoring): {e}")
                 subscribed_all = False
-                break
+                # invalid kanalni valid ro‘yxatga qo‘shmaymiz
+                continue
 
         if invalid_channels_to_remove:
             for channel_id in invalid_channels_to_remove:
-                await remove_sponsor_channel(channel_id)
+                await remove_sponsor_channel(channel_id, bot.token)
 
         if not subscribed_all:
+            # referral argumentini saqlab qo‘yamiz
             if args:
                 await state.update_data(referral_uid=args)
 
-            markup = await create_channels_keyboard(channels, bot)
+            # ❗ Faqat valid kanallardan keyboard yasaymiz
+            markup = await create_channels_keyboard(valid_channels, bot)
             await message.answer("Для использования бота подпишитесь на наши каналы:", reply_markup=markup)
             return
+    # === /KANALLARNI TEKSHIRISH BLOKI ===
 
     referrer_uid = None
     target_id = None
@@ -397,11 +433,11 @@ async def start_command(message: Message, state: FSMContext, bot: Bot, command: 
             await state.update_data({"link_user": target_id})
             await message.answer(
                 "🚀 Здесь можно отправить анонимное сообщение человеку, который опубликовал эту ссылку.\n\n"
-            "Напишите сюда всё, что хотите ему передать, и через несколько секунд он "
-            "получит ваше сообщение, но не будет знать от кого.\n\n"
-            "Отправить можно фото, видео, 💬 текст, 🔊 голосовые, 📷видеосообщения "
-            "(кружки), а также стикеры.\n\n"
-            "⚠️ Это полностью анонимно!",
+                "Напишите сюда всё, что хотите ему передать, и через несколько секунд он "
+                "получит ваше сообщение, но не будет знать от кого.\n\n"
+                "Отправить можно фото, видео, 💬 текст, 🔊 голосовые, 📷видеосообщения "
+                "(кружки), а также стикеры.\n\n"
+                "⚠️ Это полностью анонимно!",
                 reply_markup=await cancel_in()
             )
             return
@@ -409,22 +445,22 @@ async def start_command(message: Message, state: FSMContext, bot: Bot, command: 
     anonymous_link = await generate_anonymous_link(bot, user_id)
     await message.answer(
         f"🚀 <b>Начни получать анонимные сообщения прямо сейчас!</b>\n\n"
-            f"Твоя личная ссылка:\n👉{anonymous_link}\n\n"
-            f"Размести эту ссылку ☝️ в своём профиле Telegram/Instagram/TikTok или "
-            f"других соц сетях, чтобы начать получать сообщения 💬",
+        f"Твоя личная ссылка:\n👉{anonymous_link}\n\n"
+        f"Размести эту ссылку ☝️ в своём профиле Telegram/Instagram/TikTok или "
+        f"других соц сетях, чтобы начать получать сообщения 💬",
         parse_mode="html",
         reply_markup=await main_menu_bt()
     )
+
 
 
 @client_bot_router.callback_query(F.data == "check_chan", AnonBotFilter())
 async def check_channels_callback(callback: CallbackQuery, state: FSMContext, bot: Bot):
     user_id = callback.from_user.id
     state_data = await state.get_data()
-    print(state_data)
     referrer_args = state_data.get('referral_uid') or state_data.get('referral')
 
-    print(f"DEBUG: user_id={user_id}, referrer_args='{referrer_args}'")
+    logger.info(f"DEBUG check_channels_callback: user_id={user_id}, referrer_args='{referrer_args}'")
 
     channels = await get_channels_with_type_for_check(bot.token)
     subscribed_all = True
@@ -440,17 +476,16 @@ async def check_channels_callback(callback: CallbackQuery, state: FSMContext, bo
 
             if member.status in ['left', 'kicked']:
                 subscribed_all = False
-                break
         except Exception as e:
             logger.error(f"Error checking channel {channel_id} (type: {channel_type}): {e}")
             if channel_type == 'sponsor':
                 invalid_channels_to_remove.append(channel_id)
             subscribed_all = False
-            break
+            continue
 
     if invalid_channels_to_remove:
         for channel_id in invalid_channels_to_remove:
-            await remove_sponsor_channel(channel_id)
+            await remove_sponsor_channel(channel_id, bot.token)
 
     if not subscribed_all:
         await callback.answer("Вы еще не подписались на все каналы!", show_alert=True)
@@ -474,10 +509,11 @@ async def check_channels_callback(callback: CallbackQuery, state: FSMContext, bo
         elif referrer_args.isdigit():
             if int(referrer_args) != user_id:
                 target_user_id = int(referrer_args)
+
     if not user_exists:
         if referrer_id:
             result = await save_user(callback.from_user, bot, referrer_id)
-            print(f"Created user {user_id} with referrer {referrer_id}")
+            logger.info(f"Created user {user_id} with referrer {referrer_id}")
             if result.get('inviter') and result.get('client_created'):
                 try:
                     from asgiref.sync import sync_to_async
@@ -493,7 +529,7 @@ async def check_channels_callback(callback: CallbackQuery, state: FSMContext, bo
                         text=f"У вас {user_link}! Баланс пополнен на {bonus_amount}₽",
                         parse_mode="HTML"
                     )
-                    print(f"Notification sent to {result['inviter'].uid}")
+                    logger.info(f"Notification sent to {result['inviter'].uid}")
                 except Exception as e:
                     logger.error(f"Error sending referral notification: {e}")
         else:
@@ -504,13 +540,17 @@ async def check_channels_callback(callback: CallbackQuery, state: FSMContext, bo
                 last_name=callback.from_user.last_name,
                 bot=bot
             )
-            print(f"Created user {user_id} without referrer")
+            logger.info(f"Created user {user_id} without referrer, result={result}")
 
     # Anonim xabar uchun yo'naltirish
     if target_user_id:
         target_exists = await check_user_exists(target_user_id)
         if target_exists:
-            await callback.message.delete()
+            try:
+                await callback.message.delete()
+            except:
+                pass
+
             anonymous_link = await generate_anonymous_link(bot, user_id)
             await callback.message.answer(
                 f"🚀 <b>Начни получать анонимные сообщения прямо сейчас!</b>\n\n"
@@ -551,6 +591,7 @@ async def check_channels_callback(callback: CallbackQuery, state: FSMContext, bo
     )
     await state.clear()
     await callback.answer()
+
 
 async def create_channels_keyboard(channels, bot):
     keyboard = []
@@ -805,87 +846,87 @@ async def process_referral(inviter_id: int, new_user_id: int, current_bot_token:
         return False
 
 
-@client_bot_router.callback_query(lambda c: c.data == 'check_chan', AnonBotFilter())
-async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: Bot):
-    user_id = callback.from_user.id
-    subscribed = await check_channels(user_id, bot)
-
-    if not subscribed:
-        await callback.answer("Пожалуйста, подпишитесь на все каналы.")
-        channels = await get_channels_for_check()
-        markup = InlineKeyboardBuilder()
-
-        for channel_id, _ in channels:
-            try:
-                chat = await bot.get_chat(channel_id)
-                invite_link = chat.invite_link or await bot.create_chat_invite_link(channel_id)
-                markup.button(text=chat.title, url=invite_link)
-            except Exception as e:
-                continue
-
-        markup.button(text="✅ Проверить подписку", callback_data="check_chan")
-        markup.adjust(1)
-
-        await callback.message.edit_text(
-            "Для использования бота подпишитесь на наших спонсоров",
-            reply_markup=markup.as_markup()
-        )
-        return
-
-    await callback.answer("Вы успешно подписались на все каналы!")
-
-    user_exists = await check_user(user_id)
-
-    if not user_exists:
-        new_link = await create_start_link(bot, str(callback.from_user.id))
-        link_for_db = new_link[new_link.index("=") + 1:]
-
-        await add_user(
-            tg_id=callback.from_user.id,
-            user_name=callback.from_user.first_name,
-            invited="Никто",
-            invited_id=None,
-            bot_token=bot.token,
-            user_link=link_for_db
-        )
-
-        data = await state.get_data()
-        referral = data.get('referral')
-        if referral:
-            try:
-                referral_id = int(referral)
-                await process_referral(callback.message, referral_id)
-            except ValueError:
-                logger.error(f"Invalid referral ID: {referral}")
-
-    data = await state.get_data()
-    target_id = data.get('link_user')
-
-    if target_id:
-        await callback.message.delete()
-        await callback.message.answer(
-            "🚀 Здесь можно отправить анонимное сообщение человеку, который опубликовал эту ссылку.\n\n"
-            "Напишите сюда всё, что хотите ему передать, и через несколько секунд он "
-            "получит ваше сообщение, но не будет знать от кого.\n\n"
-            "Отправить можно фото, видео, 💬 текст, 🔊 голосовые, 📷видеосообщения "
-            "(кружки), а также стикеры.\n\n"
-            "⚠️ Это полностью анонимно!",
-            reply_markup=await cancel_in()
-        )
-        await state.set_state(Links.send_st)
-    else:
-        me = await bot.get_me()
-        await callback.message.delete()
-        anonymous_link = await generate_anonymous_link(bot, user_id)
-
-        await callback.message.answer(
-            f"🚀 <b>Начни получать анонимные сообщения прямо сейчас!</b>\n\n"
-            f"Твоя личная ссылка:\n👉{anonymous_link}\n\n"
-            f"Размести эту ссылку ☝️ в своём профиле Telegram/Instagram/TikTok или "
-            f"других соц сетях, чтобы начать получать сообщения 💬",
-            parse_mode="html",
-            reply_markup=await main_menu_bt()
-        )
+# @client_bot_router.callback_query(lambda c: c.data == 'check_chan', AnonBotFilter())
+# async def check_subscriptions(callback: CallbackQuery, state: FSMContext, bot: Bot):
+#     user_id = callback.from_user.id
+#     subscribed = await check_channels(user_id, bot)
+#
+#     if not subscribed:
+#         await callback.answer("Пожалуйста, подпишитесь на все каналы.")
+#         channels = await get_channels_for_check()
+#         markup = InlineKeyboardBuilder()
+#
+#         for channel_id, _ in channels:
+#             try:
+#                 chat = await bot.get_chat(channel_id)
+#                 invite_link = chat.invite_link or await bot.create_chat_invite_link(channel_id)
+#                 markup.button(text=chat.title, url=invite_link)
+#             except Exception as e:
+#                 continue
+#
+#         markup.button(text="✅ Проверить подписку", callback_data="check_chan")
+#         markup.adjust(1)
+#
+#         await callback.message.edit_text(
+#             "Для использования бота подпишитесь на наших спонсоров",
+#             reply_markup=markup.as_markup()
+#         )
+#         return
+#
+#     await callback.answer("Вы успешно подписались на все каналы!")
+#
+#     user_exists = await check_user(user_id)
+#
+#     if not user_exists:
+#         new_link = await create_start_link(bot, str(callback.from_user.id))
+#         link_for_db = new_link[new_link.index("=") + 1:]
+#
+#         await add_user(
+#             tg_id=callback.from_user.id,
+#             user_name=callback.from_user.first_name,
+#             invited="Никто",
+#             invited_id=None,
+#             bot_token=bot.token,
+#             user_link=link_for_db
+#         )
+#
+#         data = await state.get_data()
+#         referral = data.get('referral')
+#         if referral:
+#             try:
+#                 referral_id = int(referral)
+#                 await process_referral(callback.message, referral_id)
+#             except ValueError:
+#                 logger.error(f"Invalid referral ID: {referral}")
+#
+#     data = await state.get_data()
+#     target_id = data.get('link_user')
+#
+#     if target_id:
+#         await callback.message.delete()
+#         await callback.message.answer(
+#             "🚀 Здесь можно отправить анонимное сообщение человеку, который опубликовал эту ссылку.\n\n"
+#             "Напишите сюда всё, что хотите ему передать, и через несколько секунд он "
+#             "получит ваше сообщение, но не будет знать от кого.\n\n"
+#             "Отправить можно фото, видео, 💬 текст, 🔊 голосовые, 📷видеосообщения "
+#             "(кружки), а также стикеры.\n\n"
+#             "⚠️ Это полностью анонимно!",
+#             reply_markup=await cancel_in()
+#         )
+#         await state.set_state(Links.send_st)
+#     else:
+#         me = await bot.get_me()
+#         await callback.message.delete()
+#         anonymous_link = await generate_anonymous_link(bot, user_id)
+#
+#         await callback.message.answer(
+#             f"🚀 <b>Начни получать анонимные сообщения прямо сейчас!</b>\n\n"
+#             f"Твоя личная ссылка:\n👉{anonymous_link}\n\n"
+#             f"Размести эту ссылку ☝️ в своём профиле Telegram/Instagram/TikTok или "
+#             f"других соц сетях, чтобы начать получать сообщения 💬",
+#             parse_mode="html",
+#             reply_markup=await main_menu_bt()
+#         )
 
 @client_bot_router.callback_query(F.data.in_(["cancel",
                                               "greeting_rem"]),AnonBotFilter())
