@@ -636,18 +636,24 @@ async def create_channels_keyboard(channels, bot: Bot):
                     invite_link = channel_url or ""
                     title = "Подписаться"
 
+                    # 1️⃣ Kanal nomini RAW API orqali olish (pydantic'siz)
                     try:
                         raw_chat = await bot.session.make_request(
+                            bot,              # ← MUHIM: birinchi argument - bot
                             "getChat",
-                            {"chat_id": channel_id_int}
+                            {"chat_id": channel_id_int},
                         )
+                        # Aiogram odatda 'result'ni qaytaradi, lekin har ikki variantni tekshiramiz
                         if isinstance(raw_chat, dict):
-                            title = raw_chat.get("title") or title
+                            data = raw_chat.get("result", raw_chat)
+                            if isinstance(data, dict):
+                                title = data.get("title") or title
                     except Exception as e:
                         logger.warning(
                             f"Cannot fetch chat title via raw getChat for sponsor channel {channel_id_int}: {e}"
                         )
 
+                    # 2️⃣ Agar link bazada yo'q bo'lsa – yangi invite link yaratamiz
                     if not invite_link:
                         try:
                             link_data = await bot.create_chat_invite_link(channel_id_int)
@@ -656,6 +662,7 @@ async def create_channels_keyboard(channels, bot: Bot):
                                 f"Created new invite link for sponsor channel {channel_id_int}: {invite_link}"
                             )
 
+                            # 3️⃣ Bazadagi ChannelSponsor.url ni yangilaymiz
                             try:
                                 sponsor = await sync_to_async(ChannelSponsor.objects.get)(
                                     chanel_id=str(channel_id_int),
@@ -675,7 +682,7 @@ async def create_channels_keyboard(channels, bot: Bot):
                             )
                             continue
 
-
+                # 🔹 SYSTEM KANAL (agar ishlatayotgan bo'lsang)
                 elif channel_type == 'system':
                     from modul.loader import main_bot
                     invite_link = channel_url or ""
