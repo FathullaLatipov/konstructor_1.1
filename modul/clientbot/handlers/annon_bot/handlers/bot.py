@@ -19,6 +19,7 @@ from modul.clientbot.handlers.annon_bot.states import Links, AnonBotFilter
 from modul.clientbot.handlers.annon_bot.userservice import get_greeting, get_user_link, get_user_by_link, \
     get_all_statistic, get_channels_for_check, change_greeting_user, change_link_db, add_user, add_link_statistic, \
     add_answer_statistic, add_messages_info, check_user, check_link, check_reply, update_user_link, get_user_by_id
+from modul.clientbot.handlers.kino_bot.keyboards.kb import cancel_kb
 from modul.clientbot.handlers.kino_bot.shortcuts import get_all_channels_sponsors
 from modul.clientbot.handlers.refs.keyboards.buttons import main_menu_bt2
 from modul.clientbot.handlers.refs.shortcuts import get_actual_price, get_actual_min_amount
@@ -295,28 +296,28 @@ def remove_sponsor_channel(channel_id, bot_token: str | None = None):
 
 @sync_to_async
 def get_channels_with_type_for_check(bot_token: str):
-
     try:
-        from modul import models
-        bot = models.Bot.objects.filter(token=bot_token).first()
-        if not bot:
-            logger.error(f"get_channels_with_type_for_check: Bot not found for token {bot_token}")
-            return []
-
-        sponsor_channels = ChannelSponsor.objects.filter(bot=bot)
-        sponsor_list = [(str(c.chanel_id), '', 'sponsor') for c in sponsor_channels]
+        sponsor_channels = ChannelSponsor.objects.filter(bot__token=bot_token)
+        sponsor_list = [
+            (str(c.chanel_id), c.url or "", 'sponsor')
+            for c in sponsor_channels
+        ]
 
         system_channels = SystemChannel.objects.filter(is_active=True)
-        system_list = [(str(c.channel_id), c.channel_url, 'system') for c in system_channels]
+        system_list = [
+            (str(c.channel_id), c.channel_url, 'system')
+            for c in system_channels
+        ]
 
         all_channels = sponsor_list + system_list
         logger.info(
-            f"Found sponsor channels: {len(sponsor_list)}, system channels: {len(system_list)} for bot {bot.username}"
+            f"Found sponsor channels: {len(sponsor_list)}, system channels: {len(system_list)} for bot {bot_token}"
         )
         return all_channels
     except Exception as e:
         logger.error(f"Error getting channels with type: {e}")
         return []
+
 
 
 
@@ -457,25 +458,81 @@ class AddChannelSponsorForm(StatesGroup):
     channel = State()
 
 
+
+
+
 @client_bot_router.message(AddChannelSponsorForm.channel, AnonBotFilter())
 async def admin_add_channel_message(message: Message, state: FSMContext, bot: Bot):
+    # 1) Forward qilinganligini va aynan KANAL ekanini tekshiramiz
     if not message.forward_from_chat or message.forward_from_chat.type != "channel":
-        await message.answer("Пожалуйста перешлите сообщение из канала")
+        await message.answer("❌ Пожалуйста, перешлите сообщение из канала", reply_markup=cancel_kb)
         return
 
-    channel_id = str(message.forward_from_chat.id)
-    title = message.forward_from_chat.title
+    forward_chat = message.forward_from_chat
+    channel_id = forward_chat.id
+    channel_title = forward_chat.title or "Подписаться"
 
-    bot_db = await shortcuts.get_bot(bot)
+    # 2) Joriy botni DB'dan olamiz
+    bot_db = await get_bot_by_token(bot.token)
+    if not bot_db:
+        await message.answer("❌ Внутренняя ошибка: бот не найден в базе")
+        logger.error(f"Bot not found in DB for token {bot.token}")
+        return
 
-    await sync_to_async(ChannelSponsor.objects.get_or_create)(
-        chanel_id=channel_id,
+    # 3) Kanal uchun invite_link tayyorlaymiz
+    invite_link = None
+
+    # Agar kanal public bo'lsa (username bor bo'lsa) – shundan link yasaymiz
+    if getattr(forward_chat, "username", None):
+        invite_link = f"https://t.me/{forward_chat.username}"
+        logger.info(f"Using public username link for channel {channel_id}: {invite_link}")
+    else:
+        # Aks holda – yangi invite-link yaratamiz
+        try:
+            link_obj = await bot.create_chat_invite_link(channel_id)
+            invite_link = link_obj.invite_link
+            logger.info(f"Created invite link for channel {channel_id}: {invite_link}")
+        except Exception as e:
+            logger.error(f"Error creating invite link for channel {channel_id}: {e}")
+            invite_link = ""
+
+    channel_str_id = str(channel_id)
+
+    # 4) ChannelSponsor yozuvini yaratish / yangilash
+    obj, created = await sync_to_async(ChannelSponsor.objects.get_or_create)(
+        chanel_id=channel_str_id,
         bot=bot_db,
-        defaults={"url": None}
+        defaults={
+            "url": invite_link,
+            "title": channel_title,
+        }
     )
 
+    if not created:
+        updated = False
+
+        # URL o'zgargan bo'lsa – yangilaymiz
+        if invite_link and obj.url != invite_link:
+            obj.url = invite_link
+            updated = True
+
+        # Title o'zgargan bo'lsa – uni ham yangilaymiz
+        if channel_title and obj.title != channel_title:
+            obj.title = channel_title
+            updated = True
+
+        if updated:
+            await sync_to_async(obj.save)()
+            logger.info(f"Updated ChannelSponsor for {channel_str_id}")
+
+    # 5) State tozalaymiz va foydalanuvchiga javob beramiz
     await state.clear()
-    await message.answer(f"✅ Канал «{title}» добавлен!", reply_markup=await main_menu_bt())
+    await message.answer(
+        f"✅ Канал добавлен!\n\n"
+        f"📣 {channel_title}\n"
+        f"🆔 {channel_str_id}\n"
+        f"🔗 {invite_link or 'Ссылка не получена'}"
+    )
 
 
 
@@ -634,26 +691,19 @@ async def create_channels_keyboard(channels, bot: Bot):
                 # 🔹 SPONSOR KANAL
                 if channel_type == 'sponsor':
                     invite_link = channel_url or ""
+
+                    # Title'ni DB'dan olamiz
+                    sponsor = await sync_to_async(
+                        ChannelSponsor.objects.filter(
+                            chanel_id=str(channel_id_int),
+                            bot__token=bot.token
+                        ).first
+                    )()
                     title = "Подписаться"
+                    if sponsor and sponsor.title:
+                        title = sponsor.title
 
-                    # 1️⃣ Kanal nomini RAW API orqali olish (pydantic'siz)
-                    try:
-                        raw_chat = await bot.session.make_request(
-                            bot,              # ← MUHIM: birinchi argument - bot
-                            "getChat",
-                            {"chat_id": channel_id_int},
-                        )
-                        # Aiogram odatda 'result'ni qaytaradi, lekin har ikki variantni tekshiramiz
-                        if isinstance(raw_chat, dict):
-                            data = raw_chat.get("result", raw_chat)
-                            if isinstance(data, dict):
-                                title = data.get("title") or title
-                    except Exception as e:
-                        logger.warning(
-                            f"Cannot fetch chat title via raw getChat for sponsor channel {channel_id_int}: {e}"
-                        )
-
-                    # 2️⃣ Agar link bazada yo'q bo'lsa – yangi invite link yaratamiz
+                    # Agar URL bo'lmasa, bir marta yangi link yaratamiz va bazaga yozamiz
                     if not invite_link:
                         try:
                             link_data = await bot.create_chat_invite_link(channel_id_int)
@@ -662,27 +712,17 @@ async def create_channels_keyboard(channels, bot: Bot):
                                 f"Created new invite link for sponsor channel {channel_id_int}: {invite_link}"
                             )
 
-                            # 3️⃣ Bazadagi ChannelSponsor.url ni yangilaymiz
-                            try:
-                                sponsor = await sync_to_async(ChannelSponsor.objects.get)(
-                                    chanel_id=str(channel_id_int),
-                                    bot__token=bot.token
-                                )
+                            if sponsor:
                                 sponsor.url = invite_link
                                 await sync_to_async(sponsor.save)()
                                 logger.info(f"Updated ChannelSponsor URL for {channel_id_int}")
-                            except Exception as e:
-                                logger.error(
-                                    f"Error updating ChannelSponsor URL for {channel_id_int}: {e}"
-                                )
-
                         except Exception as e:
                             logger.error(
                                 f"Error creating invite link for sponsor channel {channel_id_int}: {e}"
                             )
                             continue
 
-                # 🔹 SYSTEM KANAL (agar ishlatayotgan bo'lsang)
+                # 🔹 SYSTEM KANAL (hozircha eski logika)
                 elif channel_type == 'system':
                     from modul.loader import main_bot
                     invite_link = channel_url or ""
@@ -714,7 +754,6 @@ async def create_channels_keyboard(channels, bot: Bot):
                         url=invite_link
                     )
                 ])
-
             else:
                 logger.error(f"Invalid channel format: {channel_info}")
                 continue
@@ -727,6 +766,7 @@ async def create_channels_keyboard(channels, bot: Bot):
         InlineKeyboardButton(text="✅ Проверить подписку", callback_data="check_chan")
     ])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
 
 
 
