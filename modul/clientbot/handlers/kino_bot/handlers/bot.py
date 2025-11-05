@@ -1380,7 +1380,7 @@ async def back_to_main_menu(message: Message, state: FSMContext, bot: Bot):
     await start(message, state, bot)
 
 
-@client_bot_router.message(AddChannelSponsorForm.channel)
+@client_bot_router.message(AddChannelSponsorForm.channel, AdminFilter())
 async def admin_add_channel_msg(message: Message, state: FSMContext):
     print(f"DEBUG: admin_add_channel_msg called")
     print(f"DEBUG: Forward from: {message.forward_from_chat}")

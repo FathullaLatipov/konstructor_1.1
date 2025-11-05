@@ -11,6 +11,7 @@ from django.db import transaction
 
 from modul import models
 from modul.clientbot import shortcuts
+from modul.clientbot.handlers.admin import AdminStates
 from modul.clientbot.handlers.annon_bot.keyboards.buttons import channels_in, payment_keyboard, main_menu_bt, cancel_in, \
     again_in, payment_amount_keyboard, greeting_in, link_in
 from modul.clientbot.handlers.annon_bot.states import Links, AnonBotFilter
@@ -471,6 +472,7 @@ async def admin_add_channel_message(message: Message, state: FSMContext, bot: Bo
 
     await state.clear()
     await message.answer(f"✅ Канал «{title}» добавлен!", reply_markup=await main_menu_bt())
+
 
 
 
