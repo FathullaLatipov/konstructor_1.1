@@ -624,9 +624,9 @@ async def create_channels_keyboard(channels, bot: Bot):
     from modul.models import ChannelSponsor
 
     keyboard = []
+
     for channel_info in channels:
         try:
-            # format: (channel_id, channel_url, channel_type)
             if isinstance(channel_info, tuple) and len(channel_info) == 3:
                 channel_id, channel_url, channel_type = channel_info
                 channel_id_int = int(channel_id)
@@ -634,15 +634,24 @@ async def create_channels_keyboard(channels, bot: Bot):
                 # 🔹 SPONSOR KANAL
                 if channel_type == 'sponsor':
                     invite_link = channel_url or ""
+                    title = "Подписаться"
 
-                    # Agar URL bo'lmasa – yangi invite link yaratamiz
+                    # 1️⃣ Kanal nomini olish (try/except bilan)
+                    try:
+                        chat_info = await bot.get_chat(channel_id_int)
+                        if getattr(chat_info, "title", None):
+                            title = chat_info.title
+                    except Exception as e:
+                        logger.warning(f"Cannot fetch chat title for sponsor channel {channel_id_int}: {e}")
+
+                    # 2️⃣ Agar link yo‘q bo‘lsa – yaratamiz
                     if not invite_link:
                         try:
                             link_data = await bot.create_chat_invite_link(channel_id_int)
                             invite_link = link_data.invite_link
                             logger.info(f"Created new invite link for sponsor channel {channel_id_int}: {invite_link}")
 
-                            # 🧩 Bazadagi yozuvni yangilaymiz
+                            # 3️⃣ Bazani yangilash
                             try:
                                 sponsor = await sync_to_async(ChannelSponsor.objects.get)(
                                     chanel_id=str(channel_id_int), bot__token=bot.token
@@ -652,77 +661,54 @@ async def create_channels_keyboard(channels, bot: Bot):
                                 logger.info(f"Updated ChannelSponsor URL for {channel_id_int}")
                             except Exception as e:
                                 logger.error(f"Error updating ChannelSponsor URL for {channel_id_int}: {e}")
-
                         except Exception as e:
                             logger.error(f"Error creating invite link for sponsor channel {channel_id_int}: {e}")
-                            continue  # link yo'q bo'lsa tugma yaratmaymiz
-
-                    title = "Подписаться"
+                            continue
 
                 # 🔹 SYSTEM KANAL
                 elif channel_type == 'system':
                     from modul.loader import main_bot
-                    chat = None
                     invite_link = channel_url or ""
+                    title = "Подписаться"
 
                     try:
                         chat = await main_bot.get_chat(channel_id_int)
+                        if chat:
+                            title = chat.title or title
+                            invite_link = invite_link or chat.invite_link or (
+                                f"https://t.me/{chat.username}" if getattr(chat, "username", None) else invite_link
+                            )
                     except Exception as e:
                         logger.error(f"Error getting system chat info for {channel_id_int}: {e}")
-
-                    if chat:
-                        invite_link = invite_link or chat.invite_link or (
-                            f"https://t.me/{chat.username}" if getattr(chat, "username", None) else invite_link
-                        )
-                        title = chat.title or "Подписаться"
-                    else:
                         if not invite_link:
-                            logger.error(f"No URL for system channel {channel_id_int}, skipping")
-                            continue
-                        title = "Подписаться"
+                            continue  # skip channel without link
 
                 else:
                     logger.error(f"Unknown channel_type={channel_type} for {channel_info}")
                     continue
 
+                # ✅ Tugma qo‘shish
+                keyboard.append([
+                    InlineKeyboardButton(
+                        text=f"📢 {title}",
+                        url=invite_link
+                    )
+                ])
+
             else:
-                # Eski format (faqat channel_id) bo'lsa
-                if isinstance(channel_info, tuple):
-                    channel_id_int = int(channel_info[0])
-                    channel_url = channel_info[1] if len(channel_info) > 1 else ""
-                else:
-                    channel_id_int = int(channel_info)
-                    channel_url = ""
-
-                invite_link = channel_url
-                title = "Подписаться"
-
-                if not invite_link:
-                    try:
-                        chat = await bot.get_chat(channel_id_int)
-                        invite_link = chat.invite_link or (
-                            f"https://t.me/{chat.username}" if getattr(chat, "username", None) else ""
-                        )
-                        title = chat.title or "Подписаться"
-                    except Exception as e:
-                        logger.error(f"Error getting chat for channel {channel_id_int}: {e}")
-                        continue
-
-            keyboard.append([
-                InlineKeyboardButton(
-                    text=f"📢 {title}",
-                    url=invite_link
-                )
-            ])
+                logger.error(f"Invalid channel format: {channel_info}")
+                continue
 
         except Exception as e:
             logger.error(f"Error creating button for channel {channel_info}: {e}")
             continue
 
+    # 🔘 Tekshirish tugmasi
     keyboard.append([
         InlineKeyboardButton(text="✅ Проверить подписку", callback_data="check_chan")
     ])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
 
 
 
