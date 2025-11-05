@@ -2,6 +2,7 @@ import logging
 import re
 from aiogram import F, Bot, types,html
 from aiogram.filters import CommandStart, Filter, CommandObject
+from aiogram.fsm.state import StatesGroup, State
 from aiogram.utils.deep_linking import create_start_link
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, BotCommand, CallbackQuery, LabeledPrice, InlineKeyboardButton, InlineKeyboardMarkup
@@ -18,7 +19,6 @@ from modul.clientbot.handlers.annon_bot.states import Links, AnonBotFilter
 from modul.clientbot.handlers.annon_bot.userservice import get_greeting, get_user_link, get_user_by_link, \
     get_all_statistic, get_channels_for_check, change_greeting_user, change_link_db, add_user, add_link_statistic, \
     add_answer_statistic, add_messages_info, check_user, check_link, check_reply, update_user_link, get_user_by_id
-from modul.clientbot.handlers.kino_bot.handlers.bot import AddChannelSponsorForm
 from modul.clientbot.handlers.kino_bot.shortcuts import get_all_channels_sponsors
 from modul.clientbot.handlers.refs.keyboards.buttons import main_menu_bt2
 from modul.clientbot.handlers.refs.shortcuts import get_actual_price, get_actual_min_amount
@@ -453,6 +453,9 @@ async def start_command(message: Message, state: FSMContext, bot: Bot, command: 
         parse_mode="html",
         reply_markup=await main_menu_bt()
     )
+class AddChannelSponsorForm(StatesGroup):
+    channel = State()
+
 
 @client_bot_router.message(AddChannelSponsorForm.channel, AnonBotFilter())
 async def admin_add_channel_message(message: Message, state: FSMContext, bot: Bot):
