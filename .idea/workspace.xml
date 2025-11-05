@@ -5,7 +5,40 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="703cb133-094c-4fbb-b47c-2aee762a8e0e" name="Changes" comment="qwe">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/.idea/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/.idea/davinci.iml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/.idea/inspectionProfiles/Project_Default.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/.idea/inspectionProfiles/profiles_settings.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/.idea/misc.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/.idea/modules.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/.idea/vcs.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/api.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/cron/cron_davinci.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/files/arial.ttf" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/files/arial_b.ttf" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/files/graph/info.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/files/graph/op.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/files/graph/pay.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/files/info_load.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/files/info_start.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/files/loading_graph.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/files/pay/Qiwi.mp4" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/files/pay/pay.jpg" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/function.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/loader.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/main.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/module/Zadmin.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/module/Zuser.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/module/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/module/davinci.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/module/info.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/module/op.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/module/pay.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/module/payTime.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/davinci/sql.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/modul/bot/main_bot/handlers/create_bot.py" beforeDir="false" afterPath="$PROJECT_DIR$/modul/bot/main_bot/handlers/create_bot.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modul/bot/main_bot/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/modul/bot/main_bot/main.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

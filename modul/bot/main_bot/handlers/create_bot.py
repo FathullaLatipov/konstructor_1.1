@@ -192,6 +192,7 @@ async def show_module_info(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
+
 @create_bot_router.callback_query(F.data == "start_create_with_module")
 async def start_create_with_module(callback: CallbackQuery, state: FSMContext):
     """Показ инструкции и запрос токена"""
@@ -220,13 +221,33 @@ async def start_create_with_module(callback: CallbackQuery, state: FSMContext):
     )
     await callback.answer()
 
-
-
 @create_bot_router.message(StateFilter(CreateBotStates.waiting_for_token))
 async def process_token(message: types.Message, state: FSMContext):
     logger.info(f"[START] process_token от {message.from_user.id} | текст: {message.text}")
 
+    # Проверка текущего состояния для предотвращения "not handled"
+    current_state = await state.get_state()
+    if current_state != CreateBotStates.waiting_for_token:
+        logger.warning(f"State mismatch: expected {CreateBotStates.waiting_for_token}, got {current_state}")
+        await state.clear()
+        return
+
     token = message.text.strip()
+
+    # Проверка на отмену
+    cancel_texts = ["/start", "/cancel", "❌Отменить"]
+    if token in cancel_texts:
+        await state.clear()
+        await message.answer(
+            "❌ <b>Создание бота отменено.</b>\n\n"
+            "Вы можете начать заново в любое время.",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_to_main")]
+            ]),
+            parse_mode="HTML"
+        )
+        logger.info(f"[CANCEL] Создание бота отменено пользователем {message.from_user.id}")
+        return
 
     # Проверка формата
     if not re.match(r'^\d{8,10}:[A-Za-z0-9_-]{35}$', token):
@@ -277,12 +298,14 @@ async def process_token(message: types.Message, state: FSMContext):
 
     if not selected_module:
         await loading_msg.edit_text("❌ <b>Модуль не выбран!</b> Начните заново /start", parse_mode="HTML")
+        await state.clear()
         return
 
     # Проверка пользователя
     user = await get_user_by_uid(message.from_user.id)
     if not user:
         await loading_msg.edit_text("❌ <b>Пользователь не найден!</b> Введите /start", parse_mode="HTML")
+        await state.clear()
         return
 
     # Сохраняем данные в state
@@ -307,10 +330,12 @@ async def process_token(message: types.Message, state: FSMContext):
     except Exception as e:
         logger.exception(f"Ошибка при создании бота: {e}")
         await loading_msg.edit_text("❌ Ошибка при создании бота. Попробуйте позже.", parse_mode="HTML")
+        await state.clear()
         return
 
     if not new_bot:
         await loading_msg.edit_text("❌ Не удалось создать бота. Повторите попытку позже.", parse_mode="HTML")
+        await state.clear()
         return
 
     # Установка вебхука
@@ -325,11 +350,11 @@ async def process_token(message: types.Message, state: FSMContext):
             parse_mode="HTML"
         )
 
-    # Информация о модуле
+    # Информация о модуле (исправлено: 'anon' вместо 'music')
     module_names = {
         'refs': '👥 Реферальный',
         'leo': '💞 Дайвинчик',
-        'music': '💬 Asker Бот',
+        'anon': '💬 Asker Бот',
         'kino': '🎥 Кинотеатр',
         'download': '💾 DownLoader',
         'chatgpt': '💡 ChatGPT'

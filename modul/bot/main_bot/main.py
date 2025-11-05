@@ -1,4 +1,3 @@
-# modul/bot/main_bot/main.py (To'liq to'g'irlangan versiya)
 
 import asyncio
 from datetime import datetime, timedelta
@@ -8,9 +7,6 @@ from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from asgiref.sync import sync_to_async
-from django.db.models import F as DjangoF
-from django.utils import timezone
-from modul.config import settings_conf
 from modul.loader import main_bot_router, client_bot_router
 from modul.models import User
 from modul.bot.main_bot.services.user_service import get_user_by_uid, create_user_directly
@@ -36,8 +32,6 @@ async def main_menu(user_uid: int = None):
             InlineKeyboardButton(text="Мои боты 🖥️", callback_data="my_bots")
         ]
     ]
-
-    # Faqat GPT bot egalari uchun "Ваш баланс" tugmasi
     if user_uid:
         gpt_bot_ids = await get_user_gpt_bots(user_uid)
         if gpt_bot_ids:
@@ -54,7 +48,6 @@ async def main_menu(user_uid: int = None):
 
 
 async def registration_keyboard(registration_url):
-    """Ro'yxatdan o'tish klaviaturasi"""
     buttons = [[InlineKeyboardButton(text="📝 Регистрация", url=registration_url)]]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
