@@ -225,5 +225,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 print("✅ Settings loaded successfully!")
 print(f"✅ DEBUG mode: {DEBUG}")
+print(f"Allow host {ALLOWED_HOSTS}")
 print(f"✅ Database: {DATABASES['default']['NAME']}")
 print(f"✅ Redis: {REDIS_HOST}:{REDIS_PORT}")
