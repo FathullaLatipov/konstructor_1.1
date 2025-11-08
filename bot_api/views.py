@@ -68,7 +68,7 @@ async def setup_routers():
             raise
 
 
-@csrf_exempt
+
 def telegram_webhook(request, token):
     start_time = time.time()
     logger.info(f"Received webhook for token: {token}")

@@ -22,8 +22,6 @@ from modul.config import settings_conf
 logger = logging.getLogger(__name__)
 
 create_bot_router = Router()
-
-
 @create_bot_router.callback_query(F.data == "create_bot")
 async def create_bot_menu(callback: CallbackQuery, state: FSMContext):
     """Создание нового бота - показ модулей для выбора"""

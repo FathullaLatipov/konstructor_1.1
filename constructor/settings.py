@@ -1,41 +1,34 @@
-# settings.py - YAXSHILANGAN VERSIYA
+"""
+Django settings for constructor project.
+3-QADAM: REDIS QOSHILDI!
+"""
 
 import os
 from pathlib import Path
-from dotenv import load_dotenv
 
 # .env faylni yuklash
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# ===================================
 # XAVFSIZLIK SOZLAMALARI
-SECRET_KEY = os.getenv('SECRET_KEY')
-if not SECRET_KEY:
-    raise ValueError("SECRET_KEY muhit o'zgaruvchisida aniqlanmagan!")
+# ===================================
 
-DEBUG = os.getenv('DEBUG', 'False') == 'True'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-ar$$pdw25+#px0g++38=*+$u8yk!++v0uzplya3ribl432fol2')
+DEBUG = os.getenv('DEBUG', 'True') == 'True'
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost').split(',')
+APPEND_SLASH = False
 
-# PRODUCTION XAVFSIZLIK
-if not DEBUG:
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    SECURE_BROWSER_XSS_FILTER = True
-    SECURE_CONTENT_TYPE_NOSNIFF = True
-    X_FRAME_OPTIONS = 'DENY'
-    SECURE_HSTS_SECONDS = 31536000
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
+# ===================================
+# APPLICATIONS
+# ===================================
 
-CSRF_TRUSTED_ORIGINS = [
-    'https://ismoilov299.uz',
-    'https://www.ismoilov299.uz',
-]
-
-# Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -43,13 +36,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
-    # Third party
-    'django_redis',
-    
-    # Local apps
     'modul',
-    'bot_api',
+    'bot_api'
 ]
 
 MIDDLEWARE = [
@@ -67,7 +55,7 @@ ROOT_URLCONF = 'constructor.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
+        'DIRS': [],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -82,29 +70,34 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'constructor.wsgi.application'
 
+CSRF_TRUSTED_ORIGINS = ['https://ismoilov299.uz']
+
+# ===================================
 # DATABASE
+# ===================================
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': os.getenv('DB_NAME', 'konstruktor_db1'),
         'USER': os.getenv('DB_USER', 'konstruktor_us1'),
-        'PASSWORD': os.getenv('DB_PASSWORD'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'konstruktor_pass1'),
         'HOST': os.getenv('DB_HOST', 'localhost'),
         'PORT': os.getenv('DB_PORT', '5432'),
-        'CONN_MAX_AGE': 600,  # Connection pooling
-        'OPTIONS': {
-            'connect_timeout': 10,
-        }
+        'CONN_MAX_AGE': 600,  # ✅ Connection pooling
     }
 }
 
-# REDIS SOZLAMALARI
+# ===================================
+# ✅ REDIS SOZLAMALARI - YANGI!
+# ===================================
+
 REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
 REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
 REDIS_DB = int(os.getenv('REDIS_DB', 0))
 REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', None)
 
-# CACHE SOZLAMALARI
+# CACHE - Redis
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
@@ -121,48 +114,25 @@ CACHES = {
             'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
         },
         'KEY_PREFIX': 'botcon',
-        'TIMEOUT': 3600,  # 1 soat default
-    },
-    # Bot FSM state uchun
-    'bot_storage': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/1',
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            'PASSWORD': REDIS_PASSWORD,
-        },
-        'KEY_PREFIX': 'botfsm',
-        'TIMEOUT': 7200,  # 2 soat
-    },
-    # Session cache
-    'session': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/2',
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            'PASSWORD': REDIS_PASSWORD,
-        },
-        'KEY_PREFIX': 'session',
+        'TIMEOUT': 3600,  # 1 soat
     }
 }
 
-# SESSION SOZLAMALARI
+# SESSION - Redis da saqlash
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
-SESSION_CACHE_ALIAS = 'session'
+SESSION_CACHE_ALIAS = 'default'
 SESSION_COOKIE_AGE = 86400  # 24 soat
-SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = 'Lax'
 
+# ===================================
 # PASSWORD VALIDATION
+# ===================================
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
     },
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-        'OPTIONS': {
-            'min_length': 8,
-        }
     },
     {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
@@ -174,40 +144,44 @@ AUTH_PASSWORD_VALIDATORS = [
 
 AUTH_USER_MODEL = 'modul.User'
 
+# ===================================
 # INTERNATIONALIZATION
+# ===================================
+
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'Asia/Tashkent'  # O'zbekiston vaqti
+TIME_ZONE = 'Europe/Moscow'
 USE_I18N = True
 USE_TZ = True
 
-# STATIC FILES
-STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_DIRS = [BASE_DIR / 'assets']
+# ===================================
+# STATIC va MEDIA FILES
+# ===================================
 
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'static'
+STATICFILES_DIRS = (os.path.join(BASE_DIR / 'assets',),)
 
+MEDIA_URL = "media/"
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# ===================================
 # LOGGING
+# ===================================
+
+LOGS_DIR = BASE_DIR / 'logs'
+os.makedirs(LOGS_DIR, exist_ok=True)
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
         'verbose': {
-            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'format': '{levelname} {asctime} {module} {message}',
             'style': '{',
         },
         'simple': {
             'format': '{levelname} {message}',
             'style': '{',
-        },
-    },
-    'filters': {
-        'require_debug_false': {
-            '()': 'django.utils.log.RequireDebugFalse',
-        },
-        'require_debug_true': {
-            '()': 'django.utils.log.RequireDebugTrue',
         },
     },
     'handlers': {
@@ -219,19 +193,15 @@ LOGGING = {
         'file': {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': BASE_DIR / 'logs' / 'django.log',
+            'filename': LOGS_DIR / 'django.log',
             'maxBytes': 10485760,  # 10MB
             'backupCount': 5,
             'formatter': 'verbose',
         },
-        'error_file': {
-            'level': 'ERROR',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': BASE_DIR / 'logs' / 'error.log',
-            'maxBytes': 10485760,
-            'backupCount': 5,
-            'formatter': 'verbose',
-        },
+    },
+    'root': {
+        'handlers': ['console', 'file'],
+        'level': 'INFO',
     },
     'loggers': {
         'django': {
@@ -239,37 +209,21 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
-        'django.request': {
-            'handlers': ['error_file'],
-            'level': 'ERROR',
-            'propagate': False,
-        },
         'modul': {
-            'handlers': ['console', 'file', 'error_file'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'bot_api': {
-            'handlers': ['console', 'file', 'error_file'],
+            'handlers': ['console', 'file'],
             'level': 'INFO',
             'propagate': False,
         },
     },
 }
 
-# DEFAULT AUTO FIELD
+# ===================================
+# DEFAULT SETTINGS
+# ===================================
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# CELERY (optional)
-if os.getenv('USE_CELERY', 'False') == 'True':
-    CELERY_BROKER_URL = f'redis://{REDIS_HOST}:{REDIS_PORT}/3'
-    CELERY_RESULT_BACKEND = f'redis://{REDIS_HOST}:{REDIS_PORT}/4'
-    CELERY_ACCEPT_CONTENT = ['json']
-    CELERY_TASK_SERIALIZER = 'json'
-    CELERY_RESULT_SERIALIZER = 'json'
-    CELERY_TIMEZONE = TIME_ZONE
-    CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 daqiqa
-    CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 daqiqa
-
-# Logs papkasini yaratish
-os.makedirs(BASE_DIR / 'logs', exist_ok=True)
+print("✅ Settings loaded successfully!")
+print(f"✅ DEBUG mode: {DEBUG}")
+print(f"✅ Database: {DATABASES['default']['NAME']}")
+print(f"✅ Redis: {REDIS_HOST}:{REDIS_PORT}")

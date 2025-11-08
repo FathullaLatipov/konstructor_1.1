@@ -27,7 +27,7 @@ MEDIA_ROOT = BASE_DIR / "downloads"
 
 class Settings(BaseSettings):
     WEBHOOK_PATH: str = "bot/webhook/{token}"
-    WEBHOOK_URL: str = os.getenv('WEBHOOK_URL', 'https://ismoilov299.uz') + '/bot/webhook/{token}'
+    WEBHOOK_URL = 'https://ismoilov299.uz/bot/webhook/{token}'
     BOT_TOKEN: str = os.getenv('BOT_TOKEN', '')
     ADMIN: int = int(os.getenv('ADMIN_ID', '889121031'))
     DOLLAR_CURRENCY: float = 0.0
