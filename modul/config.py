@@ -8,7 +8,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from pydantic.v1 import BaseSettings
 
 from utils.exchange_rate import ExchangeRateRussia
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
 # from apscheduler.executors.asyncio import AsyncIOExecutor
 # from apscheduler.executors.pool import ProcessPoolExecutor
 # from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -24,9 +27,9 @@ MEDIA_ROOT = BASE_DIR / "downloads"
 
 class Settings(BaseSettings):
     WEBHOOK_PATH: str = "bot/webhook/{token}"
-    WEBHOOK_URL = 'https://ismoilov299.uz/bot/webhook/{token}'
-    BOT_TOKEN: str = '8397910467:AAHAzSvYAZ_Gc0-J0wBSKIPZ9w2E74SRc8Q'
-    ADMIN: int = 889121031
+    WEBHOOK_URL: str = os.getenv('WEBHOOK_URL', 'https://ismoilov299.uz') + '/bot/webhook/{token}'
+    BOT_TOKEN: str = os.getenv('BOT_TOKEN', '')
+    ADMIN: int = int(os.getenv('ADMIN_ID', '889121031'))
     DOLLAR_CURRENCY: float = 0.0
     # ADMIN_LIST = [ADMIN, 302942780]
     # PAYS: int = -1001726742937
