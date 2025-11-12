@@ -3194,6 +3194,7 @@ class UltraFastBotHandler:
             file_size_mb = file_size / (1024 * 1024)
             if file_size_mb > Config.MAX_FILE_SIZE_MB:
                 await progress_tracker.update_stage("❌ Файл слишком большой для отправки в Telegram", 0)
+                await callback.message.answer("❌ Файл слишком большой для отправки в Telegram")
                 return
 
             await self._send_ultra_fast(callback, filepath, video_title, format_choice, actual_quality,
